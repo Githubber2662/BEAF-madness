@@ -1,4 +1,3 @@
-// BEAF-madness: Multiplicative Incremental Game
 // Uses metanum.js for handling huge numbers
 
 class Game {
@@ -13,7 +12,7 @@ class Game {
     // Game state
     this.upgrades = {};
     this.buildings = {};
-    this.tickRate = 100; // milliseconds per tick
+    this.tickRate = 1; // milliseconds per tick
     this.isRunning = false;
     
     this.initializeUpgrades();
@@ -28,7 +27,7 @@ class Game {
         description: "×2 click power",
         multiplier: new MetaNum(2),
         cost: new MetaNum(10),
-        owned: 0,
+        owned: new MetaNum(0),
         type: 'click'
       },
       fastPacing: {
@@ -36,7 +35,7 @@ class Game {
         description: "×1.5 passive multiplier",
         multiplier: new MetaNum(1.5),
         cost: new MetaNum(100),
-        owned: 0,
+        owned: new MetaNum(0),
         type: 'passive'
       },
       exponentialGrowth: {
@@ -44,7 +43,7 @@ class Game {
         description: "×1.2 passive multiplier",
         multiplier: new MetaNum(1.2),
         cost: new MetaNum(1000),
-        owned: 0,
+        owned: new MetaNum(0),
         type: 'passive'
       }
     };
@@ -58,21 +57,21 @@ class Game {
         description: "Multiplies currency ×1.01 per second",
         multiplierPerSecond: new MetaNum(1.01),
         cost: new MetaNum(5),
-        owned: 0
+        owned: new MetaNum(0)
       },
       factory: {
         name: "Factory",
         description: "Multiplies currency ×1.05 per second",
         multiplierPerSecond: new MetaNum(1.05),
         cost: new MetaNum(500),
-        owned: 0
+        owned: new MetaNum(0)
       },
       megaFactory: {
         name: "Mega Factory",
         description: "Multiplies currency ×1.10 per second",
         multiplierPerSecond: new MetaNum(1.10),
         cost: new MetaNum(50000),
-        owned: 0
+        owned: new MetaNum(0)
       }
     };
   }
@@ -88,9 +87,9 @@ class Game {
     // Buildings apply their multiplier over the tick duration
     for (let buildingKey in this.buildings) {
       const building = this.buildings[buildingKey];
-      if (building.owned > 0) {
+      if (building.owned.gt(0)) {
         // Apply multiplier once per building owned
-        const multiplierThisTick = MetaNum.pow(building.multiplierPerSecond, building.owned / 10); // Spread effect
+        const multiplierThisTick = MetaNum.pow(building.multiplierPerSecond, MetaNum.mul(building.owned, Metanum.div(Game.tickRate, 1000)); // Spread effect
         this.currency = this.currency.mul(multiplierThisTick);
       }
     }
@@ -106,7 +105,7 @@ class Game {
     
     if (this.currency.gte(upgrade.cost)) {
       this.currency = this.currency.div(upgrade.cost);
-      upgrade.owned++;
+      upgrade.owned = upgrade.owned.add(1);
       
       // Update the appropriate multiplier
       if (upgrade.type === 'click') {
@@ -129,7 +128,7 @@ class Game {
     
     if (this.currency.gte(building.cost)) {
       this.currency = this.currency.div(building.cost);
-      building.owned++;
+      building.owned = building.owned.add(1);
       
       // Increase cost for next building (×1.15 per building)
       building.cost = building.cost.mul(new MetaNum(1.15));
