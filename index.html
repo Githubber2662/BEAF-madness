@@ -253,11 +253,11 @@
       const stats = `
         <div class="item">
           <div class="item-name">Total Upgrades Owned</div>
-          <div class="multiplier-display">${Object.values(state.upgrades).reduce((sum, u) => sum + u.owned, 0)}</div>
+          <div class="multiplier-display">${Object.values(state.upgrades).reduce((sum, u) => MetaNum.add(sum, u.owned), new MetaNum(0))}</div>
         </div>
         <div class="item">
           <div class="item-name">Total Buildings Owned</div>
-          <div class="multiplier-display">${Object.values(state.buildings).reduce((sum, b) => sum + b.owned, 0)}</div>
+          <div class="multiplier-display">${Object.values(state.buildings).reduce((sum, b) => MetaNum.add(sum, b.owned), new MetaNum(0))}</div>
         </div>
       `;
       document.getElementById('statisticsContainer').innerHTML = stats;
@@ -265,23 +265,19 @@
     
     // Format large numbers for display
     function formatLargeNumber(numStr) {
-      if (numStr.length <= 10) {
-        return parseFloat(numStr).toLocaleString('en-US', {
-          maximumFractionDigits: 2,
-          minimumFractionDigits: 0
-        });
-      }
+      if (numStr.length <= 20) {
+        return numStr.toString();
       return numStr.substring(0, 20) + (numStr.length > 20 ? '...' : '');
     }
     
     // Format numbers with multiplier notation
     function formatNumber(numStr) {
-      const num = parseFloat(numStr);
-      return num.toFixed(2) + 'x';
+      const num = numStr;
+      return num.toFixed(3) + 'x';
     }
     
-    // Update UI every 100ms
-    setInterval(updateUI, 100);
+    // Update UI every 1ms
+    setInterval(updateUI, 1);
     
     // Initialize on page load
     window.addEventListener('load', init);
