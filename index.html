@@ -170,6 +170,14 @@
         <div class="currency-label">Passive multiplier: <span id="passiveMultiplierDisplay">1.00x</span></div>
       </div>
       <button class="big-button" onclick="game.click(); updateUI();">CLICK FOR ×<span id="clickPower">1.00</span></button>
+      <div style="margin-top:10px; display:flex; gap:10px;">
+        <button class="item-button" onclick="game.maxAllUpgrades(); updateUI();">Max All Upgrades</button>
+        <button class="item-button" onclick="game.save();">Save</button>
+        <button class="item-button" onclick="game.load(); updateUI();">Load</button>
+        <button class="item-button" onclick="(function(){ const txt=game.exportSave(); navigator.clipboard?.writeText(txt); alert('Save copied to clipboard'); })()">Export</button>
+        <button class="item-button" onclick="(function(){ const t=prompt('Paste save JSON here'); if (t) { game.importSave(t); updateUI(); } })()">Import</button>
+        <button class="item-button" onclick="(function(){ if (game.hardReset()) { /* page will reload */ } })()">Hard Reset</button>
+      </div>
     </div>
     
     <div class="panel">
@@ -186,6 +194,11 @@
       <h2>Statistics</h2>
       <div id="statisticsContainer"></div>
     </div>
+    
+    <div class="panel">
+      <h2>Challenges</h2>
+      <div id="challengesContainer"></div>
+    </div>
   </div>
   
   <script src="metanum.js"></script>
@@ -196,8 +209,31 @@
     // Initialize game
     function init() {
       game = new Game();
+      // Try loading existing save
+      game.load();
       game.start();
       updateUI();
+    }
+    
+    // Utility formatting helpers
+    function truncateString(s, len=20) {
+      if (!s) return '';
+      return s.length > len ? s.substring(0, len) + '...' : s;
+    }
+
+    function formatLargeNumber(numStr) {
+      // numStr can be a string or MetaNum
+      if (typeof numStr !== 'string') {
+        try { numStr = numStr.toString(); } catch (e) { numStr = String(numStr); }
+      }
+      return truncateString(numStr, 30);
+    }
+    
+    function formatNumber(numStr) {
+      if (typeof numStr !== 'string') {
+        try { numStr = numStr.toString(); } catch (e) { numStr = String(numStr); }
+      }
+      return numStr + 'x';
     }
     
     // Update UI every frame
@@ -215,10 +251,13 @@
       document.getElementById('passiveMultiplierDisplay').textContent = 
         formatNumber(state.passiveMultiplier);
       
+      // Update click power label
+      document.getElementById('clickPower').textContent = formatNumber(state.clickMultiplier);
+      
       // Update upgrades
       let upgradesHTML = '';
       for (let [key, upgrade] of Object.entries(state.upgrades)) {
-        const canAfford = game.currency.gte(upgrade.cost);
+        const canAfford = game.currency.gte(new MetaNum(upgrade.cost));
         upgradesHTML += `
           <div class="item">
             <div class="item-name">${upgrade.name} <span class="count">${upgrade.owned}</span></div>
@@ -235,7 +274,7 @@
       // Update buildings
       let buildingsHTML = '';
       for (let [key, building] of Object.entries(state.buildings)) {
-        const canAfford = game.currency.gte(building.cost);
+        const canAfford = game.currency.gte(new MetaNum(building.cost));
         buildingsHTML += `
           <div class="item">
             <div class="item-name">${building.name} <span class="count">${building.owned}</span></div>
@@ -250,34 +289,40 @@
       document.getElementById('buildingsContainer').innerHTML = buildingsHTML;
       
       // Update statistics
+      const totalUpgrades = Object.values(state.upgrades).reduce((sum, u) => MetaNum.add(sum, new MetaNum(u.owned)), new MetaNum(0)).toString();
+      const totalBuildings = Object.values(state.buildings).reduce((sum, b) => MetaNum.add(sum, new MetaNum(b.owned)), new MetaNum(0)).toString();
       const stats = `
         <div class="item">
           <div class="item-name">Total Upgrades Owned</div>
-          <div class="multiplier-display">${Object.values(state.upgrades).reduce((sum, u) => MetaNum.add(sum, u.owned), new MetaNum(0))}</div>
+          <div class="multiplier-display">${totalUpgrades}</div>
         </div>
         <div class="item">
           <div class="item-name">Total Buildings Owned</div>
-          <div class="multiplier-display">${Object.values(state.buildings).reduce((sum, b) => MetaNum.add(sum, b.owned), new MetaNum(0))}</div>
+          <div class="multiplier-display">${totalBuildings}</div>
         </div>
       `;
       document.getElementById('statisticsContainer').innerHTML = stats;
+      
+      // Challenges
+      let challengesHTML = '';
+      for (let [id, ch] of Object.entries(state.challenges)) {
+        const active = state.activeChallenge === id;
+        challengesHTML += `
+          <div class="item">
+            <div class="item-name">${ch.name} ${active ? '<span class="count">Active</span>' : ''}</div>
+            <div class="item-desc">${ch.description}</div>
+            <div style="display:flex; gap:8px; margin-top:8px;">
+              <button class="item-button" onclick="(function(){ game.startChallenge('${id}'); updateUI(); })()">Start</button>
+              <button class="item-button" onclick="(function(){ game.endChallenge(); updateUI(); })()">Stop</button>
+            </div>
+          </div>
+        `;
+      }
+      document.getElementById('challengesContainer').innerHTML = challengesHTML;
     }
     
-    // Format large numbers for display
-    function formatLargeNumber(numStr) {
-      if (numStr.length <= 20) {
-        return numStr.toString();
-      return numStr.substring(0, 20) + (numStr.length > 20 ? '...' : '');
-    }
-    
-    // Format numbers with multiplier notation
-    function formatNumber(numStr) {
-      const num = numStr;
-      return num.toFixed(3) + 'x';
-    }
-    
-    // Update UI every 1ms
-    setInterval(updateUI, 1);
+    // Update UI periodically (100ms)
+    setInterval(updateUI, 16);
     
     // Initialize on page load
     window.addEventListener('load', init);
