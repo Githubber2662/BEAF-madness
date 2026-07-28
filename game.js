@@ -7,13 +7,13 @@ class Game {
     
     // Multipliers that apply each tick
     this.passiveMultiplier = new MetaNum(1);    // Things that multiply currency passively
-    this.clickMultiplier = new MetaNum(1);      // Click power multiplier
+    this.clickMultiplier = new MetaNum(1.1);      // Click power multiplier
     
     // Game state
     this.upgrades = {};
     this.buildings = {};
     this.tickRate = 1; // milliseconds per tick
-    this.isRunning = false;
+    this.isRunning = true;
     
     this.initializeUpgrades();
     this.initializeBuildings();
