@@ -12,7 +12,7 @@ class Game {
     // Game state
     this.upgrades = {};
     this.buildings = {};
-    this.tickRate = 1000; // milliseconds per tick (1 second)
+    this.tickRate = 16; // milliseconds per tick (62.5 fps)
     this.isRunning = false; // start stopped; call start() to begin
     
     // Challenges
@@ -126,11 +126,11 @@ class Game {
         // multiplierThisTick = multiplierPerSecond ^ owned
         try {
           const multiplierThisTick = MetaNum.pow(building.multiplierPerSecond, building.owned);
-          this.currency = this.currency.mul(multiplierThisTick);
+          this.currency = this.currency.mul(multiplierThisTick.pow(new MetaNum(Game.tickRate).div(1000)));
         } catch (e) {
           // Fallback: apply multiplier per owned iteratively
-          for (let i = 0; i < building.owned.toNumber(); i++) {
-            this.currency = this.currency.mul(building.multiplierPerSecond);
+          for (let i = new MetaNum(0); i.lt(building.owned); i = i.add(1)) {
+            this.currency = this.currency.mul(building.multiplierPerSecond.pow(new MetaNum(Game.tickRate).div(1000)));
           }
         }
       }
