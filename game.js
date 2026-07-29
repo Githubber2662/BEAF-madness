@@ -138,10 +138,9 @@ class Game {
     // Quick rejects
     if (!currency.gte(baseCost)) return new MetaNum(0):
     // Handle rate == 1 separately
-    const r = new MetaNum(rate);
     const lnCurrency = currency.ln();
     const lnBase = baseCost.ln();
-    const lnR = r.ln();
+    const lnR = rate.ln();
 
     if (lnR.abs.lt(1e-12)) {
       // rate == 1 => currency >= baseCost^n  => n <= ln(currency)/ln(baseCost)
@@ -210,7 +209,7 @@ class Game {
       // Update owned
       upgrade.owned = upgrade.owned.add(maxCount);
       // Compute total divisor (product of costs)
-      const expPart = MetaNum.div(MetaNum.mul(maxCount, maxCount), 2);
+      const expPart = MetaNum.div(MetaNum.mul(maxCount, maxCount.add(1)), 2);
       const totalDivisor = MetaNum.pow(baseCost, new MetaNum(maxCount)).mul(MetaNum.pow(new MetaNum(rate), new MetaNum(expPart)));
       // Divide currency
       this.currency = this.currency.div(totalDivisor).max(1);
@@ -233,7 +232,7 @@ class Game {
       // Update owned
       upgrade.owned = upgrade.owned.add(finalAmount);
       // Compute total divisor (product of costs)
-      const expPart = MetaNum.div(MetaNum.mul(finalAmount, finalAmount), 2);
+      const expPart = MetaNum.div(MetaNum.mul(finalAmount, finalAmount.add(1)), 2);
       const totalDivisor = MetaNum.pow(baseCost, new MetaNum(finalAmount)).mul(MetaNum.pow(new MetaNum(rate), new MetaNum(expPart)));
       // Divide currency
       this.currency = this.currency.div(totalDivisor).max(1);
@@ -254,7 +253,7 @@ class Game {
       if (maxCount.lte(0)) return false;
       // Apply batch purchase
       building.owned = building.owned.add(maxCount);
-      const expPart = MetaNum.div(MetaNum.mul(maxCount, maxCount), 2);
+      const expPart = MetaNum.div(MetaNum.mul(maxCount, maxCount.add(1)), 2);
       const totalDivisor = MetaNum.pow(baseCost, new MetaNum(maxCount)).mul(MetaNum.pow(new MetaNum(rate), new MetaNum(expPart)));
       this.currency = this.currency.div(totalDivisor).max(1);
       // Update current cost = baseCost * rate^{owned}
@@ -275,7 +274,7 @@ class Game {
       // Update owned
       upgrade.owned = upgrade.owned.add(finalAmount);
       // Compute total divisor (product of costs)
-      const expPart = MetaNum.div(MetaNum.mul(finalAmount, finalAmount), rate);
+      const expPart = MetaNum.div(MetaNum.mul(finalAmount, finalAmount.add(1)), 2);
       const totalDivisor = MetaNum.pow(baseCost, new MetaNum(finalAmount)).mul(MetaNum.pow(new MetaNum(rate), new MetaNum(expPart)));
       // Divide currency
       this.currency = this.currency.div(totalDivisor).max(1);
