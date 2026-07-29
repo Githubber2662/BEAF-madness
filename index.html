@@ -141,6 +141,18 @@
       background: #ccc;
       cursor: not-allowed;
     }
+
+    .small-button {
+      padding: 6px 8px;
+      font-size: 0.85em;
+      border-radius: 4px;
+      background: #667eea;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+
+    .small-button:disabled { background: #ccc; cursor: not-allowed; }
     
     .multiplier-display {
       font-size: 0.85em;
@@ -170,7 +182,7 @@
         <div class="currency-label">Passive multiplier: <span id="passiveMultiplierDisplay">1.00x</span></div>
       </div>
       <button class="big-button" onclick="game.click(); updateUI();">CLICK FOR ×<span id="clickPower">1.00</span></button>
-      <div style="margin-top:10px; display:flex; gap:10px;">
+      <div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap;">
         <button class="item-button" onclick="game.maxAllUpgrades(); updateUI();">Max All Upgrades</button>
         <button class="item-button" onclick="game.save();">Save</button>
         <button class="item-button" onclick="game.load(); updateUI();">Load</button>
@@ -265,9 +277,12 @@
             <div class="item-name">${upgrade.name} <span class="count">${upgrade.owned}</span></div>
             <div class="item-desc">${upgrade.description}</div>
             <div class="item-cost">Cost: ${formatLargeNumber(upgrade.cost)}</div>
-            <button class="item-button" ${!canAfford ? 'disabled' : ''} onclick="game.buyUpgrade('${key}'); updateUI();">
-              Buy
-            </button>
+            <div style="display:flex; gap:6px; margin-top:6px;">
+              <button class="small-button" ${!canAfford ? 'disabled' : ''} onclick="(function(){ game.buyUpgrade('${key}',1); updateUI(); })()">×1</button>
+              <button class="small-button" onclick="(function(){ game.buyUpgrade('${key}',10); updateUI(); })()">×10</button>
+              <button class="small-button" onclick="(function(){ game.buyUpgrade('${key}',100); updateUI(); })()">×100</button>
+              <button class="small-button" onclick="(function(){ game.buyUpgrade('${key}','max'); updateUI(); })()">Max</button>
+            </div>
           </div>
         `;
       }
@@ -282,9 +297,12 @@
             <div class="item-name">${building.name} <span class="count">${building.owned}</span></div>
             <div class="item-desc">${building.description}</div>
             <div class="item-cost">Cost: ${formatLargeNumber(building.cost)}</div>
-            <button class="item-button" ${!canAfford ? 'disabled' : ''} onclick="game.buyBuilding('${key}'); updateUI();">
-              Buy
-            </button>
+            <div style="display:flex; gap:6px; margin-top:6px;">
+              <button class="small-button" ${!canAfford ? 'disabled' : ''} onclick="(function(){ game.buyBuilding('${key}',1); updateUI(); })()">×1</button>
+              <button class="small-button" onclick="(function(){ game.buyBuilding('${key}',10); updateUI(); })()">×10</button>
+              <button class="small-button" onclick="(function(){ game.buyBuilding('${key}',100); updateUI(); })()">×100</button>
+              <button class="small-button" onclick="(function(){ game.buyBuilding('${key}','max'); updateUI(); })()">Max</button>
+            </div>
           </div>
         `;
       }
@@ -317,6 +335,11 @@
               <button class="item-button" onclick="(function(){ game.startChallenge('${id}'); updateUI(); })()">Start</button>
               <button class="item-button" onclick="(function(){ game.endChallenge(); updateUI(); })()">Stop</button>
             </div>
+            ${ (ch.goals || []).map(g => {
+              const completed = g.completed ? ' (Completed)' : '';
+              const claimed = g.claimed ? ' (Claimed)' : '';
+              return `\n              <div style="margin-top:8px;">\n                <div>${g.description}${completed}${claimed} - Target: ${formatLargeNumber(g.target)}</div>\n                <div style="display:flex; gap:6px; margin-top:6px;">\n                  <button class=\"small-button\" ${!g.completed || g.claimed ? 'disabled' : ''} onclick=\"(function(){ game.claimChallengeGoal('${id}','${g.id}'); updateUI(); })()\">Claim</button>\n                </div>\n              </div>`;
+            }).join('') }
           </div>
         `;
       }
