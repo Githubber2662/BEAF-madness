@@ -201,19 +201,19 @@ class Game {
       if (maxCount.lte(0)) return false;
       // Apply batch purchase
       // Multiply multiplier^maxCount
-      const multPow = MetaNum.pow(upgrade.multiplier, new MetaNum(maxCount));
+      const multPow = MetaNum.pow(upgrade.multiplier, maxCount);
       if (upgrade.type === 'click') {
         this.clickMultiplier = this.clickMultiplier.mul(multPow);
       } else if (upgrade.type === 'passive') {
         this.passiveMultiplier = this.passiveMultiplier.mul(multPow);
       }
       // Update owned
-      upgrade.owned = upgrade.owned.add(new MetaNum(maxCount));
+      upgrade.owned = upgrade.owned.add(maxCount);
       // Compute total divisor (product of costs)
-      const expPart = (maxCount * (maxCount - 1)) / 2;
+      const expPart = MetaNum.div(MetaNum.mul(maxCount, maxCount), 2);
       const totalDivisor = MetaNum.pow(baseCost, new MetaNum(maxCount)).mul(MetaNum.pow(new MetaNum(rate), new MetaNum(expPart)));
       // Divide currency
-      this.currency = this.currency.div(totalDivisor);
+      this.currency = this.currency.div(totalDivisor).max(1);
       // Update current cost = baseCost * rate^{owned}
       upgrade.cost = MetaNum.pow(new MetaNum(rate), upgrade.owned).mul(baseCost);
       return true;
@@ -221,28 +221,25 @@ class Game {
 
     // amount is number or MetaNum
     let toBuy = (amount instanceof MetaNum) ? amount : new MetaNum(amount);
-    // For simplicity we will buy one-by-one if amount is > 1 (safe but might be slower)
-    while (toBuy.gt(new MetaNum(0))) {
-      if (this.currency.gte(upgrade.cost)) {
-        // DIVIDE currency by cost (option 1 requested)
-        this.currency = this.currency.div(upgrade.cost);
-        upgrade.owned = upgrade.owned.add(new MetaNum(1));
-        
-        // Update the appropriate multiplier
-        if (upgrade.type === 'click') {
-          this.clickMultiplier = this.clickMultiplier.mul(upgrade.multiplier);
-        } else if (upgrade.type === 'passive') {
-          this.passiveMultiplier = this.passiveMultiplier.mul(upgrade.multiplier);
-        }
-        
-        // Increase cost for next purchase (×2 per upgrade)
-        upgrade.cost = upgrade.cost.mul(new MetaNum(2));
-      } else {
-        return false; // can't afford further
+    const maxCount = this.maxAffordableCount(this.currency, upgrade.baseCost, 2);
+    if(maxCount.lte(0)) return false;
+    let finalAmount = MetaNum.min(toBuy, maxCount);
+      const multPow = MetaNum.pow(upgrade.multiplier, finalAmount);
+      if (upgrade.type === 'click') {
+        this.clickMultiplier = this.clickMultiplier.mul(multPow);
+      } else if (upgrade.type === 'passive') {
+        this.passiveMultiplier = this.passiveMultiplier.mul(multPow);
       }
-      toBuy = toBuy.sub(new MetaNum(1));
-    }
-    return true;
+      // Update owned
+      upgrade.owned = upgrade.owned.add(finalAmount);
+      // Compute total divisor (product of costs)
+      const expPart = MetaNum.div(MetaNum.mul(finalAmount, finalAmount), 2);
+      const totalDivisor = MetaNum.pow(baseCost, new MetaNum(finalAmount)).mul(MetaNum.pow(new MetaNum(rate), new MetaNum(expPart)));
+      // Divide currency
+      this.currency = this.currency.div(totalDivisor).max(1);
+      // Update current cost = baseCost * rate^{owned}
+      upgrade.cost = MetaNum.pow(new MetaNum(rate), upgrade.owned).mul(baseCost);
+      return true;
   }
   
   // Buy a building
@@ -252,34 +249,39 @@ class Game {
     if (!building) return false;
     if (amount === 'max') {
       const baseCost = building.baseCost;
-      const rate = 1.15;
+      const rate = new MetaNum(1.15);
       const maxCount = this.maxAffordableCount(this.currency, baseCost, rate);
-      if (maxCount <= 0) return false;
+      if (maxCount.lte(0)) return false;
       // Apply batch purchase
-      building.owned = building.owned.add(new MetaNum(maxCount));
-      const expPart = (maxCount * (maxCount - 1)) / 2;
+      building.owned = building.owned.add(maxCount);
+      const expPart = MetaNum.div(MetaNum.mul(maxCount, maxCount), 2);
       const totalDivisor = MetaNum.pow(baseCost, new MetaNum(maxCount)).mul(MetaNum.pow(new MetaNum(rate), new MetaNum(expPart)));
-      this.currency = this.currency.div(totalDivisor);
+      this.currency = this.currency.div(totalDivisor).max(1);
       // Update current cost = baseCost * rate^{owned}
       building.cost = MetaNum.pow(new MetaNum(rate), building.owned).mul(baseCost);
       return true;
     }
 
     let toBuy = (amount instanceof MetaNum) ? amount : new MetaNum(amount);
-    while (toBuy.gt(new MetaNum(0))) {
-      if (this.currency.gte(building.cost)) {
-        // DIVIDE currency by cost (option 1)
-        this.currency = this.currency.div(building.cost);
-        building.owned = building.owned.add(new MetaNum(1));
-        
-        // Increase cost for next building (×1.15 per building)
-        building.cost = building.cost.mul(new MetaNum(1.15));
-      } else {
-        return false;
+    const maxCount = this.maxAffordableCount(this.currency, upgrade.baseCost, 1.15);
+    if(maxCount.lte(0)) return false;
+    let finalAmount = MetaNum.min(toBuy, maxCount);
+      const multPow = MetaNum.pow(upgrade.multiplier, finalAmount);
+      if (upgrade.type === 'click') {
+        this.clickMultiplier = this.clickMultiplier.mul(multPow);
+      } else if (upgrade.type === 'passive') {
+        this.passiveMultiplier = this.passiveMultiplier.mul(multPow);
       }
-      toBuy = toBuy.sub(new MetaNum(1));
-    }
-    return true;
+      // Update owned
+      upgrade.owned = upgrade.owned.add(finalAmount);
+      // Compute total divisor (product of costs)
+      const expPart = MetaNum.div(MetaNum.mul(finalAmount, finalAmount), rate);
+      const totalDivisor = MetaNum.pow(baseCost, new MetaNum(finalAmount)).mul(MetaNum.pow(new MetaNum(rate), new MetaNum(expPart)));
+      // Divide currency
+      this.currency = this.currency.div(totalDivisor).max(1);
+      // Update current cost = baseCost * rate^{owned}
+      upgrade.cost = MetaNum.pow(new MetaNum(rate), upgrade.owned).mul(baseCost);
+      return true;
   }
   
   // Max-all upgrades (attempt to buy as many upgrades as affordable)
@@ -360,7 +362,7 @@ class Game {
   load() {
     try {
       const raw = localStorage.getItem('beaf_save_v1');
-      if (!raw) return false;
+      if (!raw || raw === null || raw === undefined) return false;
       const save = JSON.parse(raw);
       this.currency = new MetaNum(save.currency);
       this.clickMultiplier = new MetaNum(save.clickMultiplier || 1);
