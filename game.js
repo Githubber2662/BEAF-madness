@@ -132,72 +132,25 @@ class Game {
   click() {
     this.currency = this.currency.mul(this.clickMultiplier);
   }
-  
-  // Helper: approximate natural log for a MetaNum by parsing its string form
-  approxLn(meta) {
-    try {
-      let s = (meta instanceof MetaNum) ? meta.toString() : String(meta);
-      if (s.toLowerCase().includes('e')) {
-        // format like 1.23e+45 or 1e45
-        const parts = s.split(/e/i);
-        const mant = parseFloat(parts[0]) || 1;
-        const exp = parseInt(parts[1]) || 0;
-        return Math.log(mant) + exp * Math.LN10;
-      } else {
-        const v = parseFloat(s);
-        return Math.log(v);
-      }
-    } catch (e) {
-      // fallback
-      return Math.log(1);
-    }
-  }
-
   // Compute maximum affordable purchases for multiplicative/division payment
   // Solves: currency >= baseCost^n * rate^{n(n-1)/2}
   maxAffordableCount(currency, baseCost, rate) {
     // Quick rejects
-    if (!currency.gte(baseCost)) return 0;
+    if (!currency.gte(baseCost)) return new MetaNum(0):
     // Handle rate == 1 separately
-    const r = parseFloat((new MetaNum(rate)).toString());
-    const lnCurrency = this.approxLn(currency);
-    const lnBase = this.approxLn(baseCost);
-    const lnR = Math.log(r);
+    const r = new MetaNum(rate);
+    const lnCurrency = currency.ln();
+    const lnBase = baseCost.ln();
+    const lnR = r.ln();
 
-    if (Math.abs(lnR) < 1e-12) {
+    if (lnR.abs.lt(1e-12)) {
       // rate == 1 => currency >= baseCost^n  => n <= ln(currency)/ln(baseCost)
-      const n = Math.floor(lnCurrency / lnBase);
-      return Math.max(0, n);
+      const n = MetaNum.floor(MetaNum.div(lnCurrency, lnBase))
+      return MetaNum.max(0, n);
     }
 
-    // Solve quadratic: (lnR/2) n^2 + (lnBase - lnR/2) n - lnCurrency <= 0
-    const A = lnR / 2;
-    const B = lnBase - (lnR / 2);
-    const C = -lnCurrency;
-
-    const disc = B * B - 4 * A * C;
-    if (disc < 0) return 0;
-    const sqrtDisc = Math.sqrt(disc);
-    let n = Math.floor((-B + sqrtDisc) / (2 * A));
-    if (!Number.isFinite(n) || n < 0) n = 0;
-
-    // Because of floating rounding with huge numbers, adjust n by checking affordability
-    // Increase n while still affordable (rare) or decrease while not affordable
-    const checkAffordable = (count) => {
-      // compute total divisor = baseCost^count * rate^{count*(count-1)/2}
-      if (count <= 0) return true;
-      const expPart = (count * (count - 1)) / 2;
-      // Use MetaNum operations
-      const totalDiv = MetaNum.pow(baseCost, new MetaNum(count)).mul(MetaNum.pow(new MetaNum(r), new MetaNum(expPart)));
-      return currency.gte(totalDiv);
-    };
-
-    // Adjust down if too high
-    while (n > 0 && !checkAffordable(n)) n--;
-    // Try increase until it fails (should be very few iterations)
-    while (checkAffordable(n + 1)) n++;
-
-    return n;
+    const n = MetaNum.floor((MetaNum.pow((MetaNum.add(lnBase.mul(2), lnR)).pow(2).add(lnCurrency.mul(lnR.mul(8))), 0.5).sub(MetaNum.add(lnBase.mul(2), lnR)).div(lnR.mul(2)));
+    return MetaNum.max(0, n);
   }
 
   // Main game tick - applies passive multipliers
@@ -226,7 +179,7 @@ class Game {
     if (this.activeChallenge && this.challenges[this.activeChallenge] && this.challenges[this.activeChallenge].modifiers && this.challenges[this.activeChallenge].modifiers.passiveMultiplierBonus) {
       passiveTotal = passiveTotal.mul(this.challenges[this.activeChallenge].modifiers.passiveMultiplierBonus);
     }
-    this.currency = this.currency.mul(passiveTotal);
+    this.currency = this.currency.mul(passiveTotal.pow(Game.tickRate.div(1000)));
 
     // Check challenge goals progress each tick
     this.checkChallengeGoals();
@@ -243,9 +196,9 @@ class Game {
     if (amount === 'max') {
       // Compute how many we can buy
       const baseCost = upgrade.baseCost;
-      const rate = 2;
+      const rate = new MetaNum(2);
       const maxCount = this.maxAffordableCount(this.currency, baseCost, rate);
-      if (maxCount <= 0) return false;
+      if (maxCount.lte(0)) return false;
       // Apply batch purchase
       // Multiply multiplier^maxCount
       const multPow = MetaNum.pow(upgrade.multiplier, new MetaNum(maxCount));
