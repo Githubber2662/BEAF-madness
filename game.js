@@ -4,26 +4,33 @@ class Game {
   constructor() {
     // Initialize currency as MetaNum (1 = starting currency)
     this.currency = new MetaNum(1);
-    
+
     // Multipliers that apply each tick
     this.passiveMultiplier = new MetaNum(1);    // Things that multiply currency passively
     this.clickMultiplier = new MetaNum(1.1);      // Click power multiplier
-    
+
     // Game state
     this.upgrades = {};
     this.buildings = {};
     this.tickRate = 16; // milliseconds per tick (62.5 fps)
     this.isRunning = false; // start stopped; call start() to begin
-    
+
     // Challenges
     this.challenges = {};
     this.activeChallenge = null;
+
+    // Autobuyers
+    this.autobuyers = {
+      upgrades: { enabled: false, intervalMs: 1000 },
+      buildings: { enabled: false, intervalMs: 1000 }
+    };
+    this._lastAutobuyerRun = Date.now();
 
     this.initializeUpgrades();
     this.initializeBuildings();
     this.initializeChallenges();
   }
-  
+
   initializeUpgrades() {
     // Upgrades that increase multipliers
     this.upgrades = {
@@ -59,7 +66,7 @@ class Game {
       }
     };
   }
-  
+
   initializeBuildings() {
     // Buildings that generate passive multipliers
     this.buildings = {
@@ -94,7 +101,7 @@ class Game {
   }
 
   initializeChallenges() {
-    // Basic challenge examples including goals
+    // More challenge examples including goals
     this.challenges = {
       none: {
         id: 'none',
@@ -113,43 +120,132 @@ class Game {
           disableUpgrades: true,
           passiveMultiplierBonus: new MetaNum(5)
         },
-        // Example goals: reach currency X while challenge active
         goals: [
-          {
-            id: 'reach_1k',
-            description: 'Reach 1,000 currency in this run',
-            type: 'currency',
-            target: new MetaNum(1000),
-            claimed: false
-          }
+          { id: 'reach_1k', description: 'Reach 1,000 currency', type: 'currency', target: new MetaNum(1000), claimed: false }
+        ]
+      },
+      noBuildings: {
+        id: 'noBuildings',
+        name: 'No Buildings',
+        description: 'Buildings disabled; clicks ×10',
+        unlocked: true,
+        modifiers: { disableBuildings: true, clickMultiplierBonus: new MetaNum(10) },
+        goals: [
+          { id: 'reach_10k', description: 'Reach 10,000 currency', type: 'currency', target: new MetaNum(10000), claimed: false }
+        ]
+      },
+      challengeMarathon: {
+        id: 'challengeMarathon',
+        name: 'Marathon',
+        description: 'Slower passive (×0.5) but larger goals',
+        unlocked: true,
+        modifiers: { passiveMultiplierBonus: new MetaNum(0.5) },
+        goals: [
+          { id: 'reach_100k', description: 'Reach 100,000 currency', type: 'currency', target: new MetaNum(100000), claimed: false }
         ]
       }
     };
     this.activeChallenge = 'none';
   }
-  
+
   // Click handler - multiplies currency by click power
   click() {
-    this.currency = this.currency.mul(this.clickMultiplier);
+    let clickPower = this.clickMultiplier.clone();
+    // Apply challenge click bonus
+    if (this.activeChallenge && this.challenges[this.activeChallenge] && this.challenges[this.activeChallenge].modifiers && this.challenges[this.activeChallenge].modifiers.clickMultiplierBonus) {
+      clickPower = clickPower.mul(this.challenges[this.activeChallenge].modifiers.clickMultiplierBonus);
+    }
+    this.currency = this.currency.mul(clickPower);
   }
+
+  // Helper: approximate natural log for a MetaNum by parsing its string form
+  approxLn(meta) {
+    try {
+      let s = (meta instanceof MetaNum) ? meta.toString() : String(meta);
+      s = s.trim();
+      if (s.toLowerCase().includes('e')) {
+        // format like 1.23e+45 or 1e45
+        const parts = s.split(/e/i);
+        const mant = parseFloat(parts[0]) || 1;
+        const exp = parseInt(parts[1]) || 0;
+        return Math.log(mant) + exp * Math.LN10;
+      } else {
+        const v = parseFloat(s);
+        return Math.log(v);
+      }
+    } catch (e) {
+      // fallback
+      return Math.log(1);
+    }
+  }
+
   // Compute maximum affordable purchases for multiplicative/division payment
   // Solves: currency >= baseCost^n * rate^{n(n-1)/2}
+  // Returns a plain integer (Number)
   maxAffordableCount(currency, baseCost, rate) {
     // Quick rejects
-    if (!currency.gte(baseCost)) return new MetaNum(0):
-    // Handle rate == 1 separately
-    const lnCurrency = currency.ln();
-    const lnBase = baseCost.ln();
-    const lnR = rate.ln();
+    if (!currency.gte(baseCost)) return 0;
 
-    if (lnR.abs.lt(1e-12)) {
+    // Convert rate to float (it should be small, like 1.15 or 2)
+    const rFloat = (rate instanceof MetaNum) ? parseFloat(rate.toString()) : parseFloat(String(rate));
+    if (!isFinite(rFloat) || rFloat <= 0) return 0;
+
+    const lnCurrency = this.approxLn(currency);
+    const lnBase = this.approxLn(baseCost);
+    const lnR = Math.log(rFloat);
+
+    if (Math.abs(lnR) < 1e-12) {
       // rate == 1 => currency >= baseCost^n  => n <= ln(currency)/ln(baseCost)
-      const n = MetaNum.floor(MetaNum.div(lnCurrency, lnBase))
-      return MetaNum.max(0, n);
+      const n = Math.floor(lnCurrency / lnBase);
+      return Math.max(0, n);
     }
 
-    const n = MetaNum.floor((MetaNum.pow((MetaNum.add(lnBase.mul(2), lnR)).pow(2).add(lnCurrency.mul(lnR.mul(8))), 0.5).sub(MetaNum.add(lnBase.mul(2), lnR)).div(lnR.mul(2)));
-    return MetaNum.max(0, n);
+    // Solve quadratic: (lnR/2) n^2 + (lnBase - lnR/2) n - lnCurrency <= 0
+    const A = lnR / 2;
+    const B = lnBase - (lnR / 2);
+    const C = -lnCurrency;
+    const disc = B * B - 4 * A * C;
+    if (disc < 0) return 0;
+    const sqrtDisc = Math.sqrt(disc);
+    let n = Math.floor((-B + sqrtDisc) / (2 * A));
+    if (!Number.isFinite(n) || n < 0) n = 0;
+
+    // Adjust using exact MetaNum arithmetic
+    const checkAffordable = (count) => {
+      if (count <= 0) return true;
+      const expPart = (count * (count - 1)) / 2;
+      const totalDiv = MetaNum.pow(baseCost, new MetaNum(count)).mul(MetaNum.pow(new MetaNum(rFloat), new MetaNum(expPart)));
+      return currency.gte(totalDiv);
+    };
+
+    while (n > 0 && !checkAffordable(n)) n--;
+    while (checkAffordable(n + 1)) n++;
+
+    return n;
+  }
+
+  // Autobuyer runner invoked periodically from tick
+  runAutobuyersIfNeeded() {
+    const now = Date.now();
+    // Upgrades autobuyer
+    if (this.autobuyers.upgrades.enabled && now - this._lastAutobuyerRun >= this.autobuyers.upgrades.intervalMs) {
+      // Try to buy max for each upgrade (skip if disabled by challenge)
+      for (let key in this.upgrades) {
+        if (this.activeChallenge && this.challenges[this.activeChallenge] && this.challenges[this.activeChallenge].modifiers && this.challenges[this.activeChallenge].modifiers.disableUpgrades) break;
+        this.buyUpgrade(key, 'max');
+      }
+    }
+    // Buildings autobuyer
+    if (this.autobuyers.buildings.enabled && now - this._lastAutobuyerRun >= this.autobuyers.buildings.intervalMs) {
+      for (let key in this.buildings) {
+        if (this.activeChallenge && this.challenges[this.activeChallenge] && this.challenges[this.activeChallenge].modifiers && this.challenges[this.activeChallenge].modifiers.disableBuildings) break;
+        this.buyBuilding(key, 'max');
+      }
+    }
+    // Update last run time to now to avoid repeated runs
+    if (now - this._lastAutobuyerRun >= Math.min(this.autobuyers.upgrades.intervalMs, this.autobuyers.buildings.intervalMs)) {
+      this._lastAutobuyerRun = now;
+    }
   }
 
   // Main game tick - applies passive multipliers
@@ -158,32 +254,31 @@ class Game {
     for (let buildingKey in this.buildings) {
       const building = this.buildings[buildingKey];
       if (building.owned.gt(new MetaNum(0))) {
-        // Apply multiplier once per second per building owned (tickRate is 1000ms)
-        // multiplierThisTick = multiplierPerSecond ^ owned
         try {
           const multiplierThisTick = MetaNum.pow(building.multiplierPerSecond, building.owned);
-          this.currency = this.currency.mul(multiplierThisTick.pow(new MetaNum(Game.tickRate).div(1000)));
+          this.currency = this.currency.mul(multiplierThisTick.pow(new MetaNum(this.tickRate).div(1000)));
         } catch (e) {
-          // Fallback: apply multiplier per owned iteratively
           for (let i = new MetaNum(0); i.lt(building.owned); i = i.add(1)) {
-            this.currency = this.currency.mul(building.multiplierPerSecond.pow(new MetaNum(Game.tickRate).div(1000)));
+            this.currency = this.currency.mul(building.multiplierPerSecond.pow(new MetaNum(this.tickRate).div(1000)));
           }
         }
       }
     }
-    
+
     // Apply passive upgrades multiplier
     let passiveTotal = this.passiveMultiplier.clone();
-    // Challenge modifier may give bonus
     if (this.activeChallenge && this.challenges[this.activeChallenge] && this.challenges[this.activeChallenge].modifiers && this.challenges[this.activeChallenge].modifiers.passiveMultiplierBonus) {
       passiveTotal = passiveTotal.mul(this.challenges[this.activeChallenge].modifiers.passiveMultiplierBonus);
     }
-    this.currency = this.currency.mul(passiveTotal.pow(Game.tickRate.div(1000)));
+    this.currency = this.currency.mul(passiveTotal.pow(new MetaNum(this.tickRate).div(1000)));
+
+    // Run autobuyers if needed (uses MetaNum-aware buy functions)
+    this.runAutobuyersIfNeeded();
 
     // Check challenge goals progress each tick
     this.checkChallengeGoals();
   }
-  
+
   // Buy an upgrade
   // amount: number | MetaNum | 'max'
   buyUpgrade(upgradeName, amount = 1) {
@@ -192,108 +287,102 @@ class Game {
     // If challenge disables upgrades
     if (this.activeChallenge && this.challenges[this.activeChallenge] && this.challenges[this.activeChallenge].modifiers && this.challenges[this.activeChallenge].modifiers.disableUpgrades) return false;
 
+    const baseCost = upgrade.baseCost;
+    const rate = 2; // cost doubles each purchase
+
     if (amount === 'max') {
-      // Compute how many we can buy
-      const baseCost = upgrade.baseCost;
-      const rate = new MetaNum(2);
       const maxCount = this.maxAffordableCount(this.currency, baseCost, rate);
-      if (maxCount.lte(0)) return false;
+      if (maxCount <= 0) return false;
       // Apply batch purchase
-      // Multiply multiplier^maxCount
-      const multPow = MetaNum.pow(upgrade.multiplier, maxCount);
+      const multPow = MetaNum.pow(upgrade.multiplier, new MetaNum(maxCount));
       if (upgrade.type === 'click') {
         this.clickMultiplier = this.clickMultiplier.mul(multPow);
       } else if (upgrade.type === 'passive') {
         this.passiveMultiplier = this.passiveMultiplier.mul(multPow);
       }
-      // Update owned
-      upgrade.owned = upgrade.owned.add(maxCount);
-      // Compute total divisor (product of costs)
-      const expPart = MetaNum.div(MetaNum.mul(maxCount, maxCount.add(1)), 2);
+      upgrade.owned = upgrade.owned.add(new MetaNum(maxCount));
+      const expPart = (maxCount * (maxCount - 1)) / 2;
       const totalDivisor = MetaNum.pow(baseCost, new MetaNum(maxCount)).mul(MetaNum.pow(new MetaNum(rate), new MetaNum(expPart)));
-      // Divide currency
-      this.currency = this.currency.div(totalDivisor).max(1);
-      // Update current cost = baseCost * rate^{owned}
+      this.currency = this.currency.div(totalDivisor);
+      // Update cost
       upgrade.cost = MetaNum.pow(new MetaNum(rate), upgrade.owned).mul(baseCost);
       return true;
     }
 
-    // amount is number or MetaNum
-    let toBuy = (amount instanceof MetaNum) ? amount : new MetaNum(amount);
-    const maxCount = this.maxAffordableCount(this.currency, upgrade.baseCost, 2);
-    if(maxCount.lte(0)) return false;
-    let finalAmount = MetaNum.min(toBuy, maxCount);
-      const multPow = MetaNum.pow(upgrade.multiplier, finalAmount);
-      if (upgrade.type === 'click') {
-        this.clickMultiplier = this.clickMultiplier.mul(multPow);
-      } else if (upgrade.type === 'passive') {
-        this.passiveMultiplier = this.passiveMultiplier.mul(multPow);
-      }
-      // Update owned
-      upgrade.owned = upgrade.owned.add(finalAmount);
-      // Compute total divisor (product of costs)
-      const expPart = MetaNum.div(MetaNum.mul(finalAmount, finalAmount.add(1)), 2);
-      const totalDivisor = MetaNum.pow(baseCost, new MetaNum(finalAmount)).mul(MetaNum.pow(new MetaNum(rate), new MetaNum(expPart)));
-      // Divide currency
-      this.currency = this.currency.div(totalDivisor).max(1);
-      // Update current cost = baseCost * rate^{owned}
-      upgrade.cost = MetaNum.pow(new MetaNum(rate), upgrade.owned).mul(baseCost);
-      return true;
+    // numeric amount
+    let toBuy = (amount instanceof MetaNum) ? parseInt(amount.toString()) : parseInt(String(amount));
+    if (isNaN(toBuy) || toBuy <= 0) return false;
+    const maxCount = this.maxAffordableCount(this.currency, baseCost, rate);
+    if (maxCount <= 0) return false;
+    const buyCount = Math.min(toBuy, maxCount);
+
+    const multPow = MetaNum.pow(upgrade.multiplier, new MetaNum(buyCount));
+    if (upgrade.type === 'click') {
+      this.clickMultiplier = this.clickMultiplier.mul(multPow);
+    } else if (upgrade.type === 'passive') {
+      this.passiveMultiplier = this.passiveMultiplier.mul(multPow);
+    }
+    upgrade.owned = upgrade.owned.add(new MetaNum(buyCount));
+    const expPart = (buyCount * (buyCount - 1)) / 2;
+    const totalDivisor = MetaNum.pow(baseCost, new MetaNum(buyCount)).mul(MetaNum.pow(new MetaNum(rate), new MetaNum(expPart)));
+    this.currency = this.currency.div(totalDivisor);
+    upgrade.cost = MetaNum.pow(new MetaNum(rate), upgrade.owned).mul(baseCost);
+    return true;
   }
-  
+
   // Buy a building
   // amount: number | MetaNum | 'max'
   buyBuilding(buildingKey, amount = 1) {
     const building = this.buildings[buildingKey];
     if (!building) return false;
+    // If challenge disables buildings
+    if (this.activeChallenge && this.challenges[this.activeChallenge] && this.challenges[this.activeChallenge].modifiers && this.challenges[this.activeChallenge].modifiers.disableBuildings) return false;
+
+    const baseCost = building.baseCost;
+    const rate = 1.15;
+
     if (amount === 'max') {
-      const baseCost = building.baseCost;
-      const rate = new MetaNum(1.15);
       const maxCount = this.maxAffordableCount(this.currency, baseCost, rate);
-      if (maxCount.lte(0)) return false;
-      // Apply batch purchase
-      building.owned = building.owned.add(maxCount);
-      const expPart = MetaNum.div(MetaNum.mul(maxCount, maxCount.add(1)), 2);
+      if (maxCount <= 0) return false;
+      building.owned = building.owned.add(new MetaNum(maxCount));
+      const expPart = (maxCount * (maxCount - 1)) / 2;
       const totalDivisor = MetaNum.pow(baseCost, new MetaNum(maxCount)).mul(MetaNum.pow(new MetaNum(rate), new MetaNum(expPart)));
-      this.currency = this.currency.div(totalDivisor).max(1);
-      // Update current cost = baseCost * rate^{owned}
+      this.currency = this.currency.div(totalDivisor);
       building.cost = MetaNum.pow(new MetaNum(rate), building.owned).mul(baseCost);
       return true;
     }
 
-    let toBuy = (amount instanceof MetaNum) ? amount : new MetaNum(amount);
-    const maxCount = this.maxAffordableCount(this.currency, upgrade.baseCost, 1.15);
-    if(maxCount.lte(0)) return false;
-    let finalAmount = MetaNum.min(toBuy, maxCount);
-      const multPow = MetaNum.pow(upgrade.multiplier, finalAmount);
-      if (upgrade.type === 'click') {
-        this.clickMultiplier = this.clickMultiplier.mul(multPow);
-      } else if (upgrade.type === 'passive') {
-        this.passiveMultiplier = this.passiveMultiplier.mul(multPow);
-      }
-      // Update owned
-      upgrade.owned = upgrade.owned.add(finalAmount);
-      // Compute total divisor (product of costs)
-      const expPart = MetaNum.div(MetaNum.mul(finalAmount, finalAmount.add(1)), 2);
-      const totalDivisor = MetaNum.pow(baseCost, new MetaNum(finalAmount)).mul(MetaNum.pow(new MetaNum(rate), new MetaNum(expPart)));
-      // Divide currency
-      this.currency = this.currency.div(totalDivisor).max(1);
-      // Update current cost = baseCost * rate^{owned}
-      upgrade.cost = MetaNum.pow(new MetaNum(rate), upgrade.owned).mul(baseCost);
-      return true;
+    let toBuy = (amount instanceof MetaNum) ? parseInt(amount.toString()) : parseInt(String(amount));
+    if (isNaN(toBuy) || toBuy <= 0) return false;
+    const maxCount = this.maxAffordableCount(this.currency, baseCost, rate);
+    if (maxCount <= 0) return false;
+    const buyCount = Math.min(toBuy, maxCount);
+
+    building.owned = building.owned.add(new MetaNum(buyCount));
+    const expPart = (buyCount * (buyCount - 1)) / 2;
+    const totalDivisor = MetaNum.pow(baseCost, new MetaNum(buyCount)).mul(MetaNum.pow(new MetaNum(rate), new MetaNum(expPart)));
+    this.currency = this.currency.div(totalDivisor);
+    building.cost = MetaNum.pow(new MetaNum(rate), building.owned).mul(baseCost);
+    return true;
   }
-  
+
+  // Toggle an autobuyer
+  toggleAutobuyer(which) {
+    if (!this.autobuyers[which]) return false;
+    this.autobuyers[which].enabled = !this.autobuyers[which].enabled;
+    this._lastAutobuyerRun = Date.now();
+    return this.autobuyers[which].enabled;
+  }
+
   // Max-all upgrades (attempt to buy as many upgrades as affordable)
   maxAllUpgrades() {
-    // For each upgrade, compute max and buy in batch
     for (let key in this.upgrades) {
-      const upg = this.upgrades[key];
       // Skip if disabled by challenge
       if (this.activeChallenge && this.challenges[this.activeChallenge] && this.challenges[this.activeChallenge].modifiers && this.challenges[this.activeChallenge].modifiers.disableUpgrades) continue;
       this.buyUpgrade(key, 'max');
     }
   }
-  
+
   // Start the game loop
   start() {
     if (this.isRunning) return;
@@ -302,13 +391,13 @@ class Game {
       this.tick();
     }, this.tickRate);
   }
-  
+
   // Stop the game loop
   stop() {
     this.isRunning = false;
     clearInterval(this.gameLoop);
   }
-  
+
   // Save / Load / Export / Import
   save() {
     try {
@@ -320,7 +409,11 @@ class Game {
         upgrades: {},
         buildings: {},
         activeChallenge: this.activeChallenge,
-        challenges: {}
+        challenges: {},
+        autobuyers: {
+          upgrades: { enabled: !!this.autobuyers.upgrades.enabled, intervalMs: this.autobuyers.upgrades.intervalMs },
+          buildings: { enabled: !!this.autobuyers.buildings.enabled, intervalMs: this.autobuyers.buildings.intervalMs }
+        }
       };
       for (let k in this.upgrades) {
         const u = this.upgrades[k];
@@ -342,7 +435,6 @@ class Game {
           multiplierPerSecond: b.multiplierPerSecond.toString()
         };
       }
-      // Save challenge claimed flags
       for (let k in this.challenges) {
         const ch = this.challenges[k];
         save.challenges[k] = {
@@ -361,13 +453,21 @@ class Game {
   load() {
     try {
       const raw = localStorage.getItem('beaf_save_v1');
-      if (!raw || raw === null || raw === undefined) return false;
+      if (!raw) return false;
       const save = JSON.parse(raw);
       this.currency = new MetaNum(save.currency);
       this.clickMultiplier = new MetaNum(save.clickMultiplier || 1);
       this.passiveMultiplier = new MetaNum(save.passiveMultiplier || 1);
       this.tickRate = save.tickRate || this.tickRate;
       this.activeChallenge = save.activeChallenge || this.activeChallenge;
+
+      if (save.autobuyers) {
+        this.autobuyers.upgrades.enabled = !!(save.autobuyers.upgrades && save.autobuyers.upgrades.enabled);
+        this.autobuyers.upgrades.intervalMs = (save.autobuyers.upgrades && save.autobuyers.upgrades.intervalMs) || this.autobuyers.upgrades.intervalMs;
+        this.autobuyers.buildings.enabled = !!(save.autobuyers.buildings && save.autobuyers.buildings.enabled);
+        this.autobuyers.buildings.intervalMs = (save.autobuyers.buildings && save.autobuyers.buildings.intervalMs) || this.autobuyers.buildings.intervalMs;
+      }
+
       for (let k in save.upgrades) {
         if (this.upgrades[k]) {
           const su = save.upgrades[k];
@@ -386,7 +486,6 @@ class Game {
           this.buildings[k].baseCost = new MetaNum(sb.baseCost || sb.cost);
         }
       }
-      // restore challenge claimed flags
       if (save.challenges) {
         for (let k in save.challenges) {
           const sc = save.challenges[k];
@@ -436,7 +535,7 @@ class Game {
     setTimeout(() => location.reload(), 50);
     return true;
   }
-  
+
   // Challenge handling
   startChallenge(id) {
     if (!this.challenges[id]) return false;
@@ -490,21 +589,17 @@ class Game {
     const goal = ch.goals.find(g => g.id === goalId);
     if (!goal || goal.claimed) return false;
     if (!goal.completed) return false;
-    // Apply a simple reward: give a one-time currency bonus equal to target (could be changed)
-    try {
-      this.currency = this.currency.mul(new MetaNum(2));
-    } catch (e) {
-      this.currency = this.currency.add(goal.target || new MetaNum(0));
-    }
+    // Apply a simple reward: double currency
+    this.currency = this.currency.mul(new MetaNum(2));
     goal.claimed = true;
     return true;
   }
-  
+
   // Get formatted currency display
   getCurrencyDisplay() {
     return this.currency.toString();
   }
-  
+
   // Get game state for UI
   getState() {
     return {
@@ -530,7 +625,8 @@ class Game {
         return acc;
       }, {}),
       challenges: this.challenges,
-      activeChallenge: this.activeChallenge
+      activeChallenge: this.activeChallenge,
+      autobuyers: this.autobuyers
     };
   }
 }
