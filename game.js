@@ -183,7 +183,7 @@ class Game {
     if (Math.abs(lnRVal) < 1e-12) {
       // rate == 1 => currency >= baseCost^n  => n <= ln(currency)/ln(baseCost)
       const n = Math.floor(lnCurrencyVal / lnBaseVal);
-      return Math.max(0, n);
+      return n > 0 ? n : 0;
     }
 
     // Solve quadratic: (lnR/2) n^2 + (lnBase - lnR/2) n - lnCurrency <= 0
@@ -306,7 +306,7 @@ class Game {
     if (isNaN(toBuy) || toBuy <= 0) return false;
     const maxCount = this.maxAffordableCount(this.currency, baseCost, rate);
     if (maxCount <= 0) return false;
-    const buyCount = Math.min(toBuy, maxCount);
+    const buyCount = toBuy <= maxCount ? toBuy : maxCount;
 
     let multPow;
     if (upgrade.isExponential) {
@@ -354,7 +354,7 @@ class Game {
     if (isNaN(toBuy) || toBuy <= 0) return false;
     const maxCount = this.maxAffordableCount(this.currency, baseCost, rate);
     if (maxCount <= 0) return false;
-    const buyCount = Math.min(toBuy, maxCount);
+    const buyCount = toBuy <= maxCount ? toBuy : maxCount;
 
     building.owned = building.owned.add(new MetaNum(buyCount));
     const expPart = (buyCount * (buyCount - 1)) / 2;
