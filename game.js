@@ -158,27 +158,6 @@ class Game {
     this.currency = this.currency.mul(clickPower);
   }
 
-  // Helper: approximate natural log for a MetaNum by parsing its string form
-  approxLn(meta) {
-    try {
-      let s = (meta instanceof MetaNum) ? meta.toString() : String(meta);
-      s = s.trim();
-      if (s.toLowerCase().includes('e')) {
-        // format like 1.23e+45 or 1e45
-        const parts = s.split(/e/i);
-        const mant = parseFloat(parts[0]) || 1;
-        const exp = parseInt(parts[1]) || 0;
-        return Math.log(mant) + exp * Math.LN10;
-      } else {
-        const v = parseFloat(s);
-        return Math.log(v);
-      }
-    } catch (e) {
-      // fallback
-      return Math.log(1);
-    }
-  }
-
   // Compute maximum affordable purchases for multiplicative/division payment
   // Solves: currency >= baseCost^n * rate^{n(n-1)/2}
   // Returns a plain integer (Number)
@@ -186,24 +165,30 @@ class Game {
     // Quick rejects
     if (!currency.gte(baseCost)) return 0;
 
-    // Convert rate to float (it should be small, like 1.15 or 2)
-    const rFloat = (rate instanceof MetaNum) ? parseFloat(rate.toString()) : parseFloat(String(rate));
-    if (!isFinite(rFloat) || rFloat <= 0) return 0;
+    // Convert rate to MetaNum
+    const rateMetaNum = (rate instanceof MetaNum) ? rate : new MetaNum(rate);
+    if (rateMetaNum.lte(new MetaNum(0))) return 0;
 
-    const lnCurrency = this.approxLn(currency);
-    const lnBase = this.approxLn(baseCost);
-    const lnR = Math.log(rFloat);
+    // Use MetaNum's built-in ln() method for logarithms
+    const lnCurrency = currency.ln();
+    const lnBase = baseCost.ln();
+    const lnR = rateMetaNum.ln();
 
-    if (Math.abs(lnR) < 1e-12) {
+    // Extract numeric values from MetaNum's internal array structure
+    const lnCurrencyVal = lnCurrency.array[0][0] * Math.pow(10, (lnCurrency.array[0].length > 1 ? lnCurrency.array[0][1] : 0));
+    const lnBaseVal = lnBase.array[0][0] * Math.pow(10, (lnBase.array[0].length > 1 ? lnBase.array[0][1] : 0));
+    const lnRVal = lnR.array[0][0] * Math.pow(10, (lnR.array[0].length > 1 ? lnR.array[0][1] : 0));
+
+    if (Math.abs(lnRVal) < 1e-12) {
       // rate == 1 => currency >= baseCost^n  => n <= ln(currency)/ln(baseCost)
-      const n = Math.floor(lnCurrency / lnBase);
+      const n = Math.floor(lnCurrencyVal / lnBaseVal);
       return Math.max(0, n);
     }
 
     // Solve quadratic: (lnR/2) n^2 + (lnBase - lnR/2) n - lnCurrency <= 0
-    const A = lnR / 2;
-    const B = lnBase - (lnR / 2);
-    const C = -lnCurrency;
+    const A = lnRVal / 2;
+    const B = lnBaseVal - (lnRVal / 2);
+    const C = -lnCurrencyVal;
     const disc = B * B - 4 * A * C;
     if (disc < 0) return 0;
     const sqrtDisc = Math.sqrt(disc);
@@ -214,7 +199,7 @@ class Game {
     const checkAffordable = (count) => {
       if (count <= 0) return true;
       const expPart = (count * (count - 1)) / 2;
-      const totalDiv = MetaNum.pow(baseCost, new MetaNum(count)).mul(MetaNum.pow(new MetaNum(rFloat), new MetaNum(expPart)));
+      const totalDiv = MetaNum.pow(baseCost, new MetaNum(count)).mul(MetaNum.pow(rateMetaNum, new MetaNum(expPart)));
       return currency.gte(totalDiv);
     };
 
@@ -231,14 +216,14 @@ class Game {
     if (this.autobuyers.upgrades.enabled && now - this._lastAutobuyerRun >= this.autobuyers.upgrades.intervalMs) {
       // Try to buy max for each upgrade (skip if disabled by challenge)
       for (let key in this.upgrades) {
-        if (this.activeChallenge && this.challenges[this.activeChallenge] && this.challenges[this.activeChallenge].modifiers && this.challenges[this.activeChallenge].modifiers.disableUpgrades) break;
+        if (this.activeChallenge && this.challenges[this.activeChallenge] && this.challenges[this.activeChallenge].modifiers && this.challenges[this.activeChallenge].modifiers.disableUpgrades) continue;
         this.buyUpgrade(key, 'max');
       }
     }
     // Buildings autobuyer
     if (this.autobuyers.buildings.enabled && now - this._lastAutobuyerRun >= this.autobuyers.buildings.intervalMs) {
       for (let key in this.buildings) {
-        if (this.activeChallenge && this.challenges[this.activeChallenge] && this.challenges[this.activeChallenge].modifiers && this.challenges[this.activeChallenge].modifiers.disableBuildings) break;
+        if (this.activeChallenge && this.challenges[this.activeChallenge] && this.challenges[this.activeChallenge].modifiers && this.challenges[this.activeChallenge].modifiers.disableBuildings) continue;
         this.buyBuilding(key, 'max');
       }
     }
@@ -256,10 +241,10 @@ class Game {
       if (building.owned.gt(new MetaNum(0))) {
         try {
           const multiplierThisTick = MetaNum.pow(building.multiplierPerSecond, building.owned);
-          this.currency = this.currency.mul(multiplierThisTick.pow(new MetaNum(this.tickRate).div(1000)));
+          this.currency = this.currency.mul(multiplierThisTick.pow(new MetaNum(this.tickRate).div(new MetaNum(1000))));
         } catch (e) {
-          for (let i = new MetaNum(0); i.lt(building.owned); i = i.add(1)) {
-            this.currency = this.currency.mul(building.multiplierPerSecond.pow(new MetaNum(this.tickRate).div(1000)));
+          for (let i = new MetaNum(0); i.lt(building.owned); i = i.add(new MetaNum(1))) {
+            this.currency = this.currency.mul(building.multiplierPerSecond.pow(new MetaNum(this.tickRate).div(new MetaNum(1000))));
           }
         }
       }
@@ -270,7 +255,7 @@ class Game {
     if (this.activeChallenge && this.challenges[this.activeChallenge] && this.challenges[this.activeChallenge].modifiers && this.challenges[this.activeChallenge].modifiers.passiveMultiplierBonus) {
       passiveTotal = passiveTotal.mul(this.challenges[this.activeChallenge].modifiers.passiveMultiplierBonus);
     }
-    this.currency = this.currency.mul(passiveTotal.pow(new MetaNum(this.tickRate).div(1000)));
+    this.currency = this.currency.mul(passiveTotal.pow(new MetaNum(this.tickRate).div(new MetaNum(1000))));
 
     // Run autobuyers if needed (uses MetaNum-aware buy functions)
     this.runAutobuyersIfNeeded();
@@ -288,7 +273,7 @@ class Game {
     if (this.activeChallenge && this.challenges[this.activeChallenge] && this.challenges[this.activeChallenge].modifiers && this.challenges[this.activeChallenge].modifiers.disableUpgrades) return false;
 
     const baseCost = upgrade.baseCost;
-    const rate = 2; // cost doubles each purchase
+    const rate = new MetaNum(2); // cost doubles each purchase
 
     if (amount === 'max') {
       const maxCount = this.maxAffordableCount(this.currency, baseCost, rate);
@@ -302,10 +287,10 @@ class Game {
       }
       upgrade.owned = upgrade.owned.add(new MetaNum(maxCount));
       const expPart = (maxCount * (maxCount - 1)) / 2;
-      const totalDivisor = MetaNum.pow(baseCost, new MetaNum(maxCount)).mul(MetaNum.pow(new MetaNum(rate), new MetaNum(expPart)));
+      const totalDivisor = MetaNum.pow(baseCost, new MetaNum(maxCount)).mul(MetaNum.pow(rate, new MetaNum(expPart)));
       this.currency = this.currency.div(totalDivisor);
       // Update cost
-      upgrade.cost = MetaNum.pow(new MetaNum(rate), upgrade.owned).mul(baseCost);
+      upgrade.cost = MetaNum.pow(rate, upgrade.owned).mul(baseCost);
       return true;
     }
 
@@ -324,9 +309,9 @@ class Game {
     }
     upgrade.owned = upgrade.owned.add(new MetaNum(buyCount));
     const expPart = (buyCount * (buyCount - 1)) / 2;
-    const totalDivisor = MetaNum.pow(baseCost, new MetaNum(buyCount)).mul(MetaNum.pow(new MetaNum(rate), new MetaNum(expPart)));
+    const totalDivisor = MetaNum.pow(baseCost, new MetaNum(buyCount)).mul(MetaNum.pow(rate, new MetaNum(expPart)));
     this.currency = this.currency.div(totalDivisor);
-    upgrade.cost = MetaNum.pow(new MetaNum(rate), upgrade.owned).mul(baseCost);
+    upgrade.cost = MetaNum.pow(rate, upgrade.owned).mul(baseCost);
     return true;
   }
 
@@ -339,16 +324,16 @@ class Game {
     if (this.activeChallenge && this.challenges[this.activeChallenge] && this.challenges[this.activeChallenge].modifiers && this.challenges[this.activeChallenge].modifiers.disableBuildings) return false;
 
     const baseCost = building.baseCost;
-    const rate = 1.15;
+    const rate = new MetaNum(1.15);
 
     if (amount === 'max') {
       const maxCount = this.maxAffordableCount(this.currency, baseCost, rate);
       if (maxCount <= 0) return false;
       building.owned = building.owned.add(new MetaNum(maxCount));
       const expPart = (maxCount * (maxCount - 1)) / 2;
-      const totalDivisor = MetaNum.pow(baseCost, new MetaNum(maxCount)).mul(MetaNum.pow(new MetaNum(rate), new MetaNum(expPart)));
+      const totalDivisor = MetaNum.pow(baseCost, new MetaNum(maxCount)).mul(MetaNum.pow(rate, new MetaNum(expPart)));
       this.currency = this.currency.div(totalDivisor);
-      building.cost = MetaNum.pow(new MetaNum(rate), building.owned).mul(baseCost);
+      building.cost = MetaNum.pow(rate, building.owned).mul(baseCost);
       return true;
     }
 
@@ -360,9 +345,9 @@ class Game {
 
     building.owned = building.owned.add(new MetaNum(buyCount));
     const expPart = (buyCount * (buyCount - 1)) / 2;
-    const totalDivisor = MetaNum.pow(baseCost, new MetaNum(buyCount)).mul(MetaNum.pow(new MetaNum(rate), new MetaNum(expPart)));
+    const totalDivisor = MetaNum.pow(baseCost, new MetaNum(buyCount)).mul(MetaNum.pow(rate, new MetaNum(expPart)));
     this.currency = this.currency.div(totalDivisor);
-    building.cost = MetaNum.pow(new MetaNum(rate), building.owned).mul(baseCost);
+    building.cost = MetaNum.pow(rate, building.owned).mul(baseCost);
     return true;
   }
 
