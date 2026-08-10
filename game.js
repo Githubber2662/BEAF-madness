@@ -57,12 +57,13 @@ class Game {
       exponentialGrowth: {
         id: 'exponentialGrowth',
         name: "Exponential Growth",
-        description: "×1.2 passive multiplier",
+        description: "passive multiplier^1.2",
         multiplier: new MetaNum(1.2),
         baseCost: new MetaNum(1000),
         cost: new MetaNum(1000),
         owned: new MetaNum(0),
-        type: 'passive'
+        type: 'passive',
+        isExponential: true
       }
     };
   }
@@ -279,7 +280,13 @@ class Game {
       const maxCount = this.maxAffordableCount(this.currency, baseCost, rate);
       if (maxCount <= 0) return false;
       // Apply batch purchase
-      const multPow = MetaNum.pow(upgrade.multiplier, new MetaNum(maxCount));
+      let multPow;
+      if (upgrade.isExponential) {
+        // For exponential upgrades, raise the current multiplier to the power
+        multPow = this.passiveMultiplier.pow(upgrade.multiplier);
+      } else {
+        multPow = MetaNum.pow(upgrade.multiplier, new MetaNum(maxCount));
+      }
       if (upgrade.type === 'click') {
         this.clickMultiplier = this.clickMultiplier.mul(multPow);
       } else if (upgrade.type === 'passive') {
@@ -301,7 +308,13 @@ class Game {
     if (maxCount <= 0) return false;
     const buyCount = Math.min(toBuy, maxCount);
 
-    const multPow = MetaNum.pow(upgrade.multiplier, new MetaNum(buyCount));
+    let multPow;
+    if (upgrade.isExponential) {
+      // For exponential upgrades, raise the current multiplier to the power
+      multPow = this.passiveMultiplier.pow(upgrade.multiplier);
+    } else {
+      multPow = MetaNum.pow(upgrade.multiplier, new MetaNum(buyCount));
+    }
     if (upgrade.type === 'click') {
       this.clickMultiplier = this.clickMultiplier.mul(multPow);
     } else if (upgrade.type === 'passive') {
