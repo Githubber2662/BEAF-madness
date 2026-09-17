@@ -291,7 +291,7 @@
       // Update buildings
       let buildingsHTML = '';
       for (let [key, building] of Object.entries(state.buildings)) {
-        const canAfford = game.currency.gte(new MetaNum(building.cost));
+        const canAfford = game.currency.gte(building.cost);
         buildingsHTML += `
           <div class="item">
             <div class="item-name">${building.name} <span class="count">${building.owned}</span></div>
@@ -347,7 +347,7 @@
     }
     
     // Update UI periodically (100ms)
-    setInterval(updateUI, 16);
+    setInterval(updateUI, 20);
     
     // Initialize on page load
     window.addEventListener('load', init);
