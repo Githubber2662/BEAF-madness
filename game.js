@@ -72,8 +72,8 @@ class Game {
         goals: [{ id: 'reach_10k', description: 'Reach 10,000 currency', type: 'currency', target: new MetaNum(10000), claimed: false }]
       },
       challengeMarathon: {
-        id: 'challengeMarathon', name: 'Marathon', description: 'Slower passive (×0.5) but larger goals', unlocked: true,
-        modifiers: { passiveMultiplierBonus: new MetaNum(0.5) },
+        id: 'challengeMarathon', name: 'Marathon', description: 'No upgrades or buildings', unlocked: true,
+        modifiers: { disableBuildings: true, disableUpgrades: true },
         goals: [{ id: 'reach_100k', description: 'Reach 100,000 currency', type: 'currency', target: new MetaNum(100000), claimed: false }]
       }
     };
