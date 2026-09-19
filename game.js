@@ -108,6 +108,7 @@ class Game {
     if (discriminant.lt(0)) return new MetaNum(0);
     let result = MetaNum.floor(b.neg().add(discriminant.sqrt()).div(a.mul(2)));
     if (result.isNaN() || result.lt(0)) return new MetaNum(0);
+    return result;
   }
 
   _challengeModifiers() {
