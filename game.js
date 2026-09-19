@@ -108,13 +108,6 @@ class Game {
     if (discriminant.lt(0)) return new MetaNum(0);
     let result = MetaNum.floor(b.neg().add(discriminant.sqrt()).div(a.mul(2)));
     if (result.isNaN() || result.lt(0)) return new MetaNum(0);
-
-    // Correct rounding at the boundary. This also protects against library
-    // rounding differences in logarithms without converting to JS numbers.
-    const costFor = n => MetaNum.pow(baseCost, n).mul(MetaNum.pow(r, n.mul(n.sub(1)).div(2)));
-    while (result.gt(0) && costFor(result).gt(currency)) result = result.sub(1);
-    while (costFor(result.add(1)).lte(currency)) result = result.add(1);
-    return result;
   }
 
   _challengeModifiers() {
@@ -148,7 +141,21 @@ class Game {
 
     const multiplier = this._buyMultiplier(upgrade, count);
     if (upgrade.type === 'click') this.clickMultiplier = this.clickMultiplier.mul(multiplier);
-    else this.passiveMultiplier = this.passiveMultiplier.mul(multiplier);
+    else {
+      if(upgrade.type === 'passive') {
+        if(upgrade.hyper.gt(1)) {          
+          this.passiveMultiplier = this.passiveMultiplier.arrow(hyper)(multiplier);
+        }
+        else {
+          if(upgrade.hyper.eq(1)) {
+            this.passiveMultiplier = this.passiveMultiplier.pow(multiplier);
+        }
+        else {
+          this.passiveMultiplier = this.passiveMultiplier.mul(multiplier);
+        }
+      }
+    }
+    }
     upgrade.owned = upgrade.owned.add(count);
     this.currency = this.currency.div(this._purchaseCost(upgrade.baseCost, rate, count)).max(1);
     upgrade.cost = MetaNum.pow(rate, upgrade.owned).mul(upgrade.baseCost);
