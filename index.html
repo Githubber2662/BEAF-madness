@@ -5,352 +5,94 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>BEAF-madness: Multiplicative Incremental Game</title>
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-    
-    body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      min-height: 100vh;
-      padding: 20px;
-      color: #333;
-    }
-    
-    .container {
-      max-width: 1200px;
-      margin: 0 auto;
-      display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
-      gap: 20px;
-    }
-    
-    .panel {
-      background: white;
-      border-radius: 10px;
-      padding: 20px;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-    }
-    
-    .main-section {
-      grid-column: 1 / -1;
-      text-align: center;
-    }
-    
-    .currency-display {
-      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-      color: white;
-      padding: 40px;
-      border-radius: 10px;
-      margin-bottom: 20px;
-    }
-    
-    .currency-value {
-      font-size: 2.5em;
-      font-weight: bold;
-      word-break: break-all;
-    }
-    
-    .currency-label {
-      font-size: 0.9em;
-      opacity: 0.9;
-      margin-top: 10px;
-    }
-    
-    .big-button {
-      width: 100%;
-      padding: 30px;
-      font-size: 1.5em;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      border: none;
-      border-radius: 10px;
-      cursor: pointer;
-      transition: transform 0.2s, box-shadow 0.2s;
-      font-weight: bold;
-    }
-    
-    .big-button:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
-    }
-    
-    .big-button:active {
-      transform: translateY(0);
-    }
-    
-    h2 {
-      color: #667eea;
-      margin-bottom: 15px;
-      border-bottom: 2px solid #667eea;
-      padding-bottom: 10px;
-    }
-    
-    h3 {
-      color: #764ba2;
-      margin-top: 15px;
-      margin-bottom: 10px;
-      font-size: 0.95em;
-    }
-    
-    .item {
-      background: #f9f9f9;
-      padding: 12px;
-      margin-bottom: 10px;
-      border-radius: 5px;
-      border-left: 4px solid #667eea;
-    }
-    
-    .item-name {
-      font-weight: bold;
-      color: #333;
-    }
-    
-    .item-desc {
-      font-size: 0.85em;
-      color: #666;
-      margin: 5px 0;
-    }
-    
-    .item-cost {
-      font-size: 0.8em;
-      color: #764ba2;
-      font-weight: bold;
-    }
-    
-    .item-button {
-      width: 100%;
-      padding: 8px;
-      margin-top: 8px;
-      background: #667eea;
-      color: white;
-      border: none;
-      border-radius: 5px;
-      cursor: pointer;
-      font-size: 0.85em;
-      transition: background 0.2s;
-    }
-    
-    .item-button:hover {
-      background: #764ba2;
-    }
-    
-    .item-button:disabled {
-      background: #ccc;
-      cursor: not-allowed;
-    }
-
-    .small-button {
-      padding: 6px 8px;
-      font-size: 0.85em;
-      border-radius: 4px;
-      background: #667eea;
-      color: white;
-      border: none;
-      cursor: pointer;
-    }
-
-    .small-button:disabled { background: #ccc; cursor: not-allowed; }
-    
-    .multiplier-display {
-      font-size: 0.85em;
-      color: #667eea;
-      margin-top: 5px;
-      font-weight: bold;
-    }
-    
-    .count {
-      display: inline-block;
-      background: #667eea;
-      color: white;
-      padding: 2px 8px;
-      border-radius: 3px;
-      font-size: 0.8em;
-      margin-left: 5px;
-    }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 20px; min-height: 100vh; font-family: 'Segoe UI', sans-serif; color: #333; background: linear-gradient(135deg, #667eea, #764ba2); }
+    .container { max-width: 1200px; margin: auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+    .panel { padding: 20px; background: white; border-radius: 10px; box-shadow: 0 10px 30px #0004; }
+    .main-section { grid-column: 1 / -1; text-align: center; }
+    .currency-display { padding: 30px; margin-bottom: 15px; color: white; background: linear-gradient(135deg, #f093fb, #f5576c); border-radius: 10px; }
+    .currency-value { font-size: 2.5em; font-weight: bold; word-break: break-all; }
+    .big-button { width: 100%; padding: 25px; color: white; background: linear-gradient(135deg, #667eea, #764ba2); border: 0; border-radius: 10px; cursor: pointer; font-size: 1.5em; font-weight: bold; }
+    .toolbar, .button-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+    button { padding: 7px 10px; color: white; background: #667eea; border: 0; border-radius: 5px; cursor: pointer; }
+    button:hover { background: #764ba2; } button:disabled { background: #bbb; cursor: not-allowed; }
+    h2 { margin-top: 0; color: #667eea; border-bottom: 2px solid #667eea; padding-bottom: 8px; }
+    .item { padding: 12px; margin-bottom: 10px; background: #f9f9f9; border-left: 4px solid #667eea; border-radius: 5px; }
+    .item-desc { margin: 5px 0; color: #666; font-size: .85em; }
+    .item-cost { color: #764ba2; font-size: .8em; font-weight: bold; }
+    .count { padding: 2px 7px; margin-left: 4px; color: white; background: #667eea; border-radius: 3px; font-size: .8em; }
+    input { width: 80px; padding: 5px; }
+    @media (max-width: 800px) { .container { grid-template-columns: 1fr; } .main-section { grid-column: auto; } }
   </style>
 </head>
 <body>
   <div class="container">
-    <div class="panel main-section">
+    <section class="panel main-section">
       <div class="currency-display">
-        <div class="currency-label">Your Currency</div>
-        <div class="currency-value" id="currencyDisplay">1</div>
-        <div class="currency-label">Click multiplier: <span id="clickMultiplierDisplay">1.00x</span></div>
-        <div class="currency-label">Passive multiplier: <span id="passiveMultiplierDisplay">1.00x</span></div>
+        <div>Your Currency</div><div class="currency-value" id="currencyDisplay">1</div>
+        <div>Click multiplier: <span id="clickMultiplierDisplay">1.1x</span></div>
+        <div>Passive multiplier: <span id="passiveMultiplierDisplay">1x</span></div>
       </div>
-      <button class="big-button" onclick="game.click(); updateUI();">CLICK FOR ×<span id="clickPower">1.00</span></button>
-      <div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap;">
-        <button class="item-button" onclick="game.maxAllUpgrades(); updateUI();">Max All Upgrades</button>
-        <button class="item-button" onclick="game.save();">Save</button>
-        <button class="item-button" onclick="game.load(); updateUI();">Load</button>
-        <button class="item-button" onclick="(window.game && window.game.start && window.game.start(), updateUI())">Start</button>
-        <button class="item-button" onclick="(window.game && window.game.stop && window.game.stop(), updateUI())">Stop</button>
-        <button class="item-button" onclick="(function(){ const txt=game.exportSave(); navigator.clipboard?.writeText(txt); alert('Save copied to clipboard'); })()">Export</button>
-        <button class="item-button" onclick="(function(){ const t=prompt('Paste save JSON here'); if (t) { game.importSave(t); updateUI(); } })()">Import</button>
-        <button class="item-button" onclick="(function(){ if (game.hardReset()) { /* page will reload */ } })()">Hard Reset</button>
+      <button class="big-button" onclick="game.click(); updateUI()">CLICK FOR ×<span id="clickPower">1.1</span></button>
+      <div class="toolbar">
+        <button onclick="game.maxAllUpgrades(); updateUI()">Max All Upgrades</button>
+        <button onclick="game.save()">Save</button><button onclick="game.load(); updateUI()">Load</button>
+        <button onclick="game.start(); updateUI()">Start</button><button onclick="game.stop(); updateUI()">Stop</button>
+        <button onclick="exportSave()">Export</button><button onclick="importSave()">Import</button><button onclick="game.hardReset()">Hard Reset</button>
       </div>
-    </div>
-    
-    <div class="panel">
-      <h2>Upgrades</h2>
-      <div id="upgradesContainer"></div>
-    </div>
-    
-    <div class="panel">
-      <h2>Buildings</h2>
-      <div id="buildingsContainer"></div>
-    </div>
-    
-    <div class="panel">
-      <h2>Statistics</h2>
-      <div id="statisticsContainer"></div>
-    </div>
-    
-    <div class="panel">
-      <h2>Challenges</h2>
-      <div id="challengesContainer"></div>
-    </div>
+    </section>
+    <section class="panel"><h2>Autobuyers</h2><div id="autobuyersContainer"></div></section>
+    <section class="panel"><h2>Upgrades</h2><div id="upgradesContainer"></div></section>
+    <section class="panel"><h2>Buildings</h2><div id="buildingsContainer"></div></section>
+    <section class="panel"><h2>Statistics</h2><div id="statisticsContainer"></div></section>
+    <section class="panel"><h2>Challenges</h2><div id="challengesContainer"></div></section>
   </div>
-  
-  <script src="metanum.js"></script>
-  <script src="game.js"></script>
+
+  <script src="metanum.js"></script><script src="game.js"></script>
   <script>
     let game;
-    
-    // Initialize game
-    function init() {
-      game = new Game();
-      // Try loading existing save
-      game.load();
-      game.start();
-      updateUI();
-    }
-    
-    // Utility formatting helpers
-    function truncateString(s, len=20) {
-      if (!s) return '';
-      return s.length > len ? s.substring(0, len) + '...' : s;
+    const display = value => { try { return String(value); } catch (_) { return ''; } };
+    const format = (value, length = 30) => { const text = display(value); return text.length > length ? text.slice(0, length) + '…' : text; };
+    const refresh = action => { action(); updateUI(); };
+
+    function updateUI() {
+      if (!game) return;
+      const state = game.getState();
+      document.getElementById('currencyDisplay').textContent = format(state.currency, 50);
+      document.getElementById('clickMultiplierDisplay').textContent = display(state.clickMultiplier) + 'x';
+      document.getElementById('passiveMultiplierDisplay').textContent = display(state.passiveMultiplier) + 'x';
+      document.getElementById('clickPower').textContent = display(state.clickMultiplier);
+
+      document.getElementById('autobuyersContainer').innerHTML = Object.entries(state.autobuyers).map(([type, autobuyer]) => `
+        <div class="item"><b>${type[0].toUpperCase() + type.slice(1)} autobuyer</b>
+          <div class="button-row"><button onclick="refresh(() => game.toggleAutobuyer('${type}'))">${autobuyer.enabled ? 'Disable' : 'Enable'}</button>
+          <label>Interval <input type="number" min="100" step="100" value="${autobuyer.intervalMs}" onchange="game.setAutobuyerInterval('${type}', this.value); game.save(); updateUI()"> ms</label></div>
+        </div>`).join('');
+
+      document.getElementById('upgradesContainer').innerHTML = Object.entries(state.upgrades).map(([key, upgrade]) => `
+        <div class="item"><b>${upgrade.name} <span class="count">${upgrade.owned}</span></b>
+          <div class="item-desc">${upgrade.description} · Hyper: ${upgrade.hyper}</div><div class="item-cost">Cost: ${format(upgrade.cost)}</div>
+          <div class="button-row"><button onclick="refresh(() => game.buyUpgrade('${key}', 1))">×1</button><button onclick="refresh(() => game.buyUpgrade('${key}', 10))">×10</button><button onclick="refresh(() => game.buyUpgrade('${key}', 100))">×100</button><button onclick="refresh(() => game.buyUpgrade('${key}', 'max'))">Max</button></div>
+        </div>`).join('');
+
+      document.getElementById('buildingsContainer').innerHTML = Object.entries(state.buildings).map(([key, building]) => `
+        <div class="item"><b>${building.name} <span class="count">${building.owned}</span></b>
+          <div class="item-desc">${building.description}</div><div class="item-cost">Cost: ${format(building.cost)}</div>
+          <div class="button-row"><button onclick="refresh(() => game.buyBuilding('${key}', 1))">×1</button><button onclick="refresh(() => game.buyBuilding('${key}', 10))">×10</button><button onclick="refresh(() => game.buyBuilding('${key}', 100))">×100</button><button onclick="refresh(() => game.buyBuilding('${key}', 'max'))">Max</button></div>
+        </div>`).join('');
+
+      const total = values => Object.values(values).reduce((sum, item) => sum.add(new MetaNum(item.owned)), new MetaNum(0));
+      document.getElementById('statisticsContainer').innerHTML = `<div class="item">Total upgrades: ${total(state.upgrades)}</div><div class="item">Total buildings: ${total(state.buildings)}</div><div class="item">Game: ${state.isRunning ? 'Running' : 'Stopped'}</div>`;
+      document.getElementById('challengesContainer').innerHTML = Object.entries(state.challenges).map(([id, challenge]) => `
+        <div class="item"><b>${challenge.name} ${state.activeChallenge === id ? '<span class="count">Active</span>' : ''}</b><div class="item-desc">${challenge.description}</div>
+        <button onclick="refresh(() => game.startChallenge('${id}'))">Start</button> <button onclick="refresh(() => game.endChallenge())">Stop</button>
+        ${(challenge.goals || []).map(goal => `<div>${goal.description}${goal.completed ? ' (Completed)' : ''}${goal.claimed ? ' (Claimed)' : ''}</div>`).join('')}</div>`).join('');
     }
 
-    function formatLargeNumber(numStr) {
-      // numStr can be a string or MetaNum
-      if (typeof numStr !== 'string') {
-        try { numStr = numStr.toString(); } catch (e) { numStr = String(numStr); }
-      }
-      return truncateString(numStr, 30);
-    }
-    
-    function formatNumber(numStr) {
-      if (typeof numStr !== 'string') {
-        try { numStr = numStr.toString(); } catch (e) { numStr = String(numStr); }
-      }
-      return numStr + 'x';
-    }
-    
-    // Update UI every frame
-    function updateUI() {
-      const state = game.getState();
-      
-      // Update currency display
-      const currencyStr = state.currency;
-      document.getElementById('currencyDisplay').textContent = 
-        currencyStr.length > 50 ? currencyStr.substring(0, 50) + '...' : currencyStr;
-      
-      // Update multiplier displays
-      document.getElementById('clickMultiplierDisplay').textContent = 
-        formatNumber(state.clickMultiplier);
-      document.getElementById('passiveMultiplierDisplay').textContent = 
-        formatNumber(state.passiveMultiplier);
-      
-      // Update click power label
-      document.getElementById('clickPower').textContent = formatNumber(state.clickMultiplier);
-      
-      // Update upgrades
-      let upgradesHTML = '';
-      for (let [key, upgrade] of Object.entries(state.upgrades)) {
-        const canAfford = game.currency.gte(new MetaNum(upgrade.cost));
-        upgradesHTML += `
-          <div class="item">
-            <div class="item-name">${upgrade.name} <span class="count">${upgrade.owned}</span></div>
-            <div class="item-desc">${upgrade.description}</div>
-            <div class="item-cost">Cost: ${formatLargeNumber(upgrade.cost)}</div>
-            <div style="display:flex; gap:6px; margin-top:6px;">
-              <button class="small-button" ${!canAfford ? 'disabled' : ''} onclick="(function(){ game.buyUpgrade('${key}',1); updateUI(); })()">×1</button>
-              <button class="small-button" onclick="(function(){ game.buyUpgrade('${key}',10); updateUI(); })()">×10</button>
-              <button class="small-button" onclick="(function(){ game.buyUpgrade('${key}',100); updateUI(); })()">×100</button>
-              <button class="small-button" onclick="(function(){ game.buyUpgrade('${key}','max'); updateUI(); })()">Max</button>
-            </div>
-          </div>
-        `;
-      }
-      document.getElementById('upgradesContainer').innerHTML = upgradesHTML;
-      
-      // Update buildings
-      let buildingsHTML = '';
-      for (let [key, building] of Object.entries(state.buildings)) {
-        const canAfford = game.currency.gte(building.cost);
-        buildingsHTML += `
-          <div class="item">
-            <div class="item-name">${building.name} <span class="count">${building.owned}</span></div>
-            <div class="item-desc">${building.description}</div>
-            <div class="item-cost">Cost: ${formatLargeNumber(building.cost)}</div>
-            <div style="display:flex; gap:6px; margin-top:6px;">
-              <button class="small-button" ${!canAfford ? 'disabled' : ''} onclick="(function(){ game.buyBuilding('${key}',1); updateUI(); })()">×1</button>
-              <button class="small-button" onclick="(function(){ game.buyBuilding('${key}',10); updateUI(); })()">×10</button>
-              <button class="small-button" onclick="(function(){ game.buyBuilding('${key}',100); updateUI(); })()">×100</button>
-              <button class="small-button" onclick="(function(){ game.buyBuilding('${key}','max'); updateUI(); })()">Max</button>
-            </div>
-          </div>
-        `;
-      }
-      document.getElementById('buildingsContainer').innerHTML = buildingsHTML;
-      
-      // Update statistics
-      const totalUpgrades = Object.values(state.upgrades).reduce((sum, u) => MetaNum.add(sum, new MetaNum(u.owned)), new MetaNum(0)).toString();
-      const totalBuildings = Object.values(state.buildings).reduce((sum, b) => MetaNum.add(sum, new MetaNum(b.owned)), new MetaNum(0)).toString();
-      const stats = `
-        <div class="item">
-          <div class="item-name">Total Upgrades Owned</div>
-          <div class="multiplier-display">${totalUpgrades}</div>
-        </div>
-        <div class="item">
-          <div class="item-name">Total Buildings Owned</div>
-          <div class="multiplier-display">${totalBuildings}</div>
-        </div>
-      `;
-      document.getElementById('statisticsContainer').innerHTML = stats;
-      
-      // Challenges
-      let challengesHTML = '';
-      for (let [id, ch] of Object.entries(state.challenges)) {
-        const active = state.activeChallenge === id;
-        challengesHTML += `
-          <div class="item">
-            <div class="item-name">${ch.name} ${active ? '<span class="count">Active</span>' : ''}</div>
-            <div class="item-desc">${ch.description}</div>
-            <div style="display:flex; gap:8px; margin-top:8px;">
-              <button class="item-button" onclick="(function(){ game.startChallenge('${id}'); updateUI(); })()">Start</button>
-              <button class="item-button" onclick="(function(){ game.endChallenge(); updateUI(); })()">Stop</button>
-            </div>
-            ${ (ch.goals || []).map(g => {
-              const completed = g.completed ? ' (Completed)' : '';
-              const claimed = g.claimed ? ' (Claimed)' : '';
-              return `\n              <div style="margin-top:8px;">\n                <div>${g.description}${completed}${claimed} - Target: ${formatLargeNumber(g.target)}</div>\n                <div style="display:flex; gap:6px; margin-top:6px;">\n                  <button class=\"small-button\" ${!g.completed || g.claimed ? 'disabled' : ''} onclick=\"(function(){ game.claimChallengeGoal('${id}','${g.id}'); updateUI(); })()\">Claim</button>\n                </div>\n              </div>`;
-            }).join('') }
-          </div>
-        `;
-      }
-      document.getElementById('challengesContainer').innerHTML = challengesHTML;
-    }
-    
-    // Update UI periodically (100ms)
-    setInterval(updateUI, 20);
-    
-    // Initialize on page load
-    window.addEventListener('load', init);
+    function exportSave() { const save = game.exportSave(); if (navigator.clipboard) navigator.clipboard.writeText(save); alert('Save copied to clipboard'); }
+    function importSave() { const save = prompt('Paste save JSON here'); if (save) { game.importSave(save); updateUI(); } }
+    function init() { game = new Game(); game.load(); game.start(); updateUI(); }
+    setInterval(updateUI, 100); window.addEventListener('load', init);
   </script>
 </body>
 </html>
