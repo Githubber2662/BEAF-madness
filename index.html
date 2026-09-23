@@ -68,7 +68,7 @@
         document.getElementById('autobuyersContainer').innerHTML = Object.entries(state.autobuyers).map(([type, autobuyer]) => `
           <div class="item"><b>${type[0].toUpperCase() + type.slice(1)} autobuyer</b>
             <div class="button-row"><button onclick="refresh(() => game.toggleAutobuyer('${type}'))">${autobuyer.enabled ? 'Disable' : 'Enable'}</button>
-            <label>Interval <input type="number" min="100" step="100" value="${autobuyer.intervalMs}" onchange="game.setAutobuyerInterval('${type}', this.value); game.save(); updateUI()"> ms</label></div>
+            <label>Interval <input type="number" min="20" step="1" value="${autobuyer.intervalMs}" onchange="game.setAutobuyerInterval('${type}', this.value); game.save(); updateUI()"> ms</label></div>
           </div>`).join('');
       }
 
