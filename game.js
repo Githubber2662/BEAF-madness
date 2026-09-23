@@ -72,7 +72,7 @@ class Game {
     // Solve: log(cost) = log(base) + (owned+n)log(rate) + n(n-1)log(rate)/2
     const a = lnRate.div(2);
     const b = lnBase.add(owned.mul(lnRate)).sub(a);
-    const discriminant = b.mul(b).add(a.mul(lnCurrency).mul(4));
+    const discriminant = b.mul(b).sub(a.mul(lnCurrency).mul(4));
     if (discriminant.isNaN() || discriminant.lt(0)) return new MetaNum(0);
 
     let result = MetaNum.floor(b.neg().add(discriminant.sqrt()).div(a.mul(2)));
