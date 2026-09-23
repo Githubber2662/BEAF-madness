@@ -63,11 +63,14 @@
       document.getElementById('passiveMultiplierDisplay').textContent = display(state.passiveMultiplier) + 'x';
       document.getElementById('clickPower').textContent = display(state.clickMultiplier);
 
-      document.getElementById('autobuyersContainer').innerHTML = Object.entries(state.autobuyers).map(([type, autobuyer]) => `
-        <div class="item"><b>${type[0].toUpperCase() + type.slice(1)} autobuyer</b>
-          <div class="button-row"><button onclick="refresh(() => game.toggleAutobuyer('${type}'))">${autobuyer.enabled ? 'Disable' : 'Enable'}</button>
-          <label>Interval <input type="number" min="100" step="100" value="${autobuyer.intervalMs}" onchange="game.setAutobuyerInterval('${type}', this.value); game.save(); updateUI()"> ms</label></div>
-        </div>`).join('');
+      const autobuyerFocused = document.activeElement && document.activeElement.closest && document.activeElement.closest('#autobuyersContainer input[type="number"]');
+      if (!autobuyerFocused) {
+        document.getElementById('autobuyersContainer').innerHTML = Object.entries(state.autobuyers).map(([type, autobuyer]) => `
+          <div class="item"><b>${type[0].toUpperCase() + type.slice(1)} autobuyer</b>
+            <div class="button-row"><button onclick="refresh(() => game.toggleAutobuyer('${type}'))">${autobuyer.enabled ? 'Disable' : 'Enable'}</button>
+            <label>Interval <input type="number" min="100" step="100" value="${autobuyer.intervalMs}" onchange="game.setAutobuyerInterval('${type}', this.value); game.save(); updateUI()"> ms</label></div>
+          </div>`).join('');
+      }
 
       document.getElementById('upgradesContainer').innerHTML = Object.entries(state.upgrades).map(([key, upgrade]) => `
         <div class="item"><b>${upgrade.name} <span class="count">${upgrade.owned}</span></b>
