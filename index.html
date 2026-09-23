@@ -92,7 +92,7 @@
     function exportSave() { const save = game.exportSave(); if (navigator.clipboard) navigator.clipboard.writeText(save); alert('Save copied to clipboard'); }
     function importSave() { const save = prompt('Paste save JSON here'); if (save) { game.importSave(save); updateUI(); } }
     function init() { game = new Game(); game.load(); game.start(); updateUI(); }
-    setInterval(updateUI, 100); window.addEventListener('load', init);
+    setInterval(updateUI, 20); window.addEventListener('load', init);
   </script>
 </body>
 </html>
