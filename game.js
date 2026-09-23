@@ -43,60 +43,93 @@ class Game {
 
   click() { this.currency = this.currency.mul(this.clickMultiplier); }
   _modifiers() { return this.challenges[this.activeChallenge]?.modifiers || {}; }
-  _purchaseCost(base, rate, count) { return MetaNum.pow(base, count).mul(MetaNum.pow(rate, count.mul(count.sub(1)).div(2))); }
 
-  maxAffordableCount(currency, baseCost, rate) {
-    if (!currency || !baseCost || !rate || !currency.isFinite() || !baseCost.isFinite()) return new MetaNum(0);
-    if (!currency.gte(baseCost)) return new MetaNum(0);
+  // Cost of `count` purchases starting after `owned` items have already been bought.
+  // The old implementation omitted `owned`, so every bulk purchase started at the
+  // base price and the displayed cost could appear not to increase.
+  _purchaseCost(base, rate, count, owned = new MetaNum(0)) {
+    base = new MetaNum(base);
+    rate = new MetaNum(rate);
+    count = new MetaNum(count);
+    owned = new MetaNum(owned);
+    const exponent = owned.add(count.mul(count.sub(1)).div(2));
+    return base.mul(MetaNum.pow(rate, exponent));
+  }
+
+  maxAffordableCount(currency, baseCost, rate, owned = new MetaNum(0)) {
+    if (!currency || !baseCost || !rate || currency.isNaN() || baseCost.isNaN() || rate.isNaN()) return new MetaNum(0);
     const r = rate instanceof MetaNum ? rate : new MetaNum(rate);
-    const lnCurrency = currency.ln(), lnBase = baseCost.ln(), lnRate = r.ln();
-    if (MetaNum.abs(lnRate).lt(new MetaNum('1e-12'))) return lnBase.gt(0) ? MetaNum.floor(lnCurrency.div(lnBase)) : new MetaNum(0);
-    const a = lnRate.div(2), b = lnBase.sub(a), discriminant = b.mul(b).add(a.mul(lnCurrency).mul(4));
-    if (!discriminant.isFinite() || discriminant.isNaN() || discriminant.lt(0)) return new MetaNum(0);
+    owned = owned instanceof MetaNum ? owned : new MetaNum(owned);
+    if (!currency.gte(this._purchaseCost(baseCost, r, 0, owned))) return new MetaNum(0);
+
+    const lnCurrency = currency.ln();
+    const lnBase = new MetaNum(baseCost).ln();
+    const lnRate = r.ln();
+    if (MetaNum.abs(lnRate).lt(new MetaNum('1e-12'))) {
+      return lnBase.gt(0) ? MetaNum.floor(lnCurrency.div(lnBase)) : new MetaNum(0);
+    }
+
+    // Solve: log(cost) = log(base) + (owned+n)log(rate) + n(n-1)log(rate)/2
+    const a = lnRate.div(2);
+    const b = lnBase.add(owned.mul(lnRate)).sub(a);
+    const discriminant = b.mul(b).add(a.mul(lnCurrency).mul(4));
+    if (discriminant.isNaN() || discriminant.lt(0)) return new MetaNum(0);
+
     let result = MetaNum.floor(b.neg().add(discriminant.sqrt()).div(a.mul(2)));
-    if (result.isNaN() || !result.isFinite() || result.lt(0)) return new MetaNum(0);
-    const cost = n => this._purchaseCost(baseCost, r, n);
-    while (result.gt(0) && (!cost(result).isFinite() || cost(result).gt(currency))) result = result.sub(1);
-    while (result.add(1).isFinite() && cost(result.add(1)).lte(currency)) result = result.add(1);
+    if (result.isNaN() || result.lt(0)) return new MetaNum(0);
+
+    const cost = n => this._purchaseCost(baseCost, r, n, owned);
+    // Correct rounding from the closed-form estimate. The loops normally run
+    // only once or twice and do not iterate over the number of purchases.
+    while (result.gt(0) && cost(result).gt(currency)) result = result.sub(1);
+    while (cost(result.add(1)).lte(currency)) result = result.add(1);
     return result;
   }
 
   _count(amount, max) {
     if (amount === 'max') return max;
     const n = amount instanceof MetaNum ? amount : new MetaNum(String(amount));
-    if (n.isNaN() || !n.isFinite() || n.lt(0)) return new MetaNum(0);
+    if (n.isNaN() || n.lt(0)) return new MetaNum(0);
     return MetaNum.min(n, max);
   }
 
   buyUpgrade(name, amount = 1) {
     const upgrade = this.upgrades[name];
     if (!upgrade || this._modifiers().disableUpgrades) return false;
-    const rate = new MetaNum(2), max = this.maxAffordableCount(this.currency, upgrade.baseCost, rate), count = this._count(amount, max);
-    if (count.isNaN() || !count.isFinite() || count.lte(0)) return false;
-    const purchaseCost = this._purchaseCost(upgrade.baseCost, rate, count);
-    if (!purchaseCost.isFinite() || purchaseCost.isNaN()) return false;
+    const rate = new MetaNum(2);
+    const max = this.maxAffordableCount(this.currency, upgrade.baseCost, rate, upgrade.owned);
+    const count = this._count(amount, max);
+    if (count.isNaN() || count.lte(0)) return false;
+
+    const purchaseCost = this._purchaseCost(upgrade.baseCost, rate, count, upgrade.owned);
+    if (purchaseCost.isNaN() || purchaseCost.gt(this.currency)) return false;
     const multiplier = MetaNum.pow(upgrade.multiplier, count);
-    if (!multiplier.isFinite() || multiplier.isNaN()) return false;
+    if (multiplier.isNaN()) return false;
+
     if (upgrade.type === 'click') this.clickMultiplier = this.clickMultiplier.mul(multiplier);
     else if (upgrade.hyper.gt(1)) this.passiveMultiplier = this.passiveMultiplier.arrow(upgrade.hyper)(multiplier);
     else if (upgrade.hyper.eq(1)) this.passiveMultiplier = this.passiveMultiplier.pow(multiplier);
     else this.passiveMultiplier = this.passiveMultiplier.mul(multiplier);
+
     upgrade.owned = upgrade.owned.add(count);
     this.currency = this.currency.div(purchaseCost).max(1);
-    upgrade.cost = MetaNum.pow(rate, upgrade.owned).mul(upgrade.baseCost);
+    upgrade.cost = this._purchaseCost(upgrade.baseCost, rate, 0, upgrade.owned);
     return true;
   }
 
   buyBuilding(name, amount = 1) {
     const building = this.buildings[name];
     if (!building || this._modifiers().disableBuildings) return false;
-    const rate = new MetaNum(1.15), max = this.maxAffordableCount(this.currency, building.baseCost, rate), count = this._count(amount, max);
-    if (count.isNaN() || !count.isFinite() || count.lte(0)) return false;
-    const purchaseCost = this._purchaseCost(building.baseCost, rate, count);
-    if (!purchaseCost.isFinite() || purchaseCost.isNaN()) return false;
+    const rate = new MetaNum(1.15);
+    const max = this.maxAffordableCount(this.currency, building.baseCost, rate, building.owned);
+    const count = this._count(amount, max);
+    if (count.isNaN() || count.lte(0)) return false;
+
+    const purchaseCost = this._purchaseCost(building.baseCost, rate, count, building.owned);
+    if (purchaseCost.isNaN() || purchaseCost.gt(this.currency)) return false;
     building.owned = building.owned.add(count);
     this.currency = this.currency.div(purchaseCost).max(1);
-    building.cost = MetaNum.pow(rate, building.owned).mul(building.baseCost);
+    building.cost = this._purchaseCost(building.baseCost, rate, 0, building.owned);
     return true;
   }
 
@@ -140,10 +173,24 @@ class Game {
   load() {
     try {
       const save = JSON.parse(localStorage.getItem('beaf_save_v1') || 'null'); if (!save) return false;
-      if (save.currency) this.currency = new MetaNum(save.currency); if (save.clickMultiplier) this.clickMultiplier = new MetaNum(save.clickMultiplier); if (save.passiveMultiplier) this.passiveMultiplier = new MetaNum(save.passiveMultiplier); if (save.activeChallenge && this.challenges[save.activeChallenge]) this.activeChallenge = save.activeChallenge;
-      for (const [key, value] of Object.entries(save.upgrades || {})) if (this.upgrades[key]) { this.upgrades[key].owned = new MetaNum(value.owned || 0); this.upgrades[key].cost = new MetaNum(value.cost || this.upgrades[key].baseCost); if (value.multiplier) this.upgrades[key].multiplier = new MetaNum(value.multiplier); if (value.hyper) this.upgrades[key].hyper = new MetaNum(value.hyper); }
-      for (const [key, value] of Object.entries(save.buildings || {})) if (this.buildings[key]) { this.buildings[key].owned = new MetaNum(value.owned || 0); this.buildings[key].cost = new MetaNum(value.cost || this.buildings[key].baseCost); }
-      for (const key of ['upgrades', 'buildings']) if (save.autobuyers?.[key]) { this.autobuyers[key].enabled = !!save.autobuyers[key].enabled; this.setAutobuyerInterval(key, save.autobuyers[key].intervalMs); }
+      if (save.currency) this.currency = new MetaNum(save.currency);
+      if (save.clickMultiplier) this.clickMultiplier = new MetaNum(save.clickMultiplier);
+      if (save.passiveMultiplier) this.passiveMultiplier = new MetaNum(save.passiveMultiplier);
+      if (save.activeChallenge && this.challenges[save.activeChallenge]) this.activeChallenge = save.activeChallenge;
+      for (const [key, value] of Object.entries(save.upgrades || {})) if (this.upgrades[key]) {
+        this.upgrades[key].owned = new MetaNum(value.owned || 0);
+        this.upgrades[key].cost = new MetaNum(value.cost || this.upgrades[key].baseCost);
+        if (value.multiplier) this.upgrades[key].multiplier = new MetaNum(value.multiplier);
+        if (value.hyper) this.upgrades[key].hyper = new MetaNum(value.hyper);
+      }
+      for (const [key, value] of Object.entries(save.buildings || {})) if (this.buildings[key]) {
+        this.buildings[key].owned = new MetaNum(value.owned || 0);
+        this.buildings[key].cost = new MetaNum(value.cost || this.buildings[key].baseCost);
+      }
+      for (const key of ['upgrades', 'buildings']) if (save.autobuyers?.[key]) {
+        this.autobuyers[key].enabled = !!save.autobuyers[key].enabled;
+        this.setAutobuyerInterval(key, save.autobuyers[key].intervalMs);
+      }
       return true;
     } catch (e) { console.error('Load failed', e); return false; }
   }
@@ -154,12 +201,11 @@ class Game {
   startChallenge(id) { if (!this.challenges[id]) return false; this.activeChallenge = id; this.currency = new MetaNum(1); this.clickMultiplier = new MetaNum(1.1); this.passiveMultiplier = new MetaNum(1); return true; }
   endChallenge() { this.activeChallenge = 'none'; return true; }
   checkChallengeGoals() { for (const goal of this.challenges[this.activeChallenge]?.goals || []) if (!goal.claimed && goal.type === 'currency' && this.currency.gte(goal.target)) goal.completed = true; }
-  claimChallengeGoal(challengeId, goalId) { const goal = this.challenges[challengeId]?.goals?.find(g => g.id === goalId); if (!goal || goal.claimed || !goal.completed) return false; this.currency = this.currency.sub(this.currency.max(1)); return true; }
+  claimChallengeGoal(challengeId, goalId) { const goal = this.challenges[challengeId]?.goals?.find(g => g.id === goalId); if (!goal || goal.claimed || !goal.completed) return false; goal.claimed = true; return true; }
   getState() {
-    const upgrades = Object.fromEntries(Object.entries(this.upgrades).map(([key, u]) => [key, { ...u, cost: u.cost.toString(), baseCost: u.baseCost.toString(), multiplier: u.multiplier.toString(), hyper: u.hyper.toString() }]));
-    const buildings = Object.fromEntries(Object.entries(this.buildings).map(([key, b]) => [key, { ...b, cost: b.cost.toString(), baseCost: b.baseCost.toString(), multiplierPerSecond: b.multiplierPerSecond.toString() }]));
+    const upgrades = Object.fromEntries(Object.entries(this.upgrades).map(([key, u]) => [key, { ...u, cost: u.cost.toString(), baseCost: u.baseCost.toString(), multiplier: u.multiplier.toString(), hyper: u.hyper.toString(), owned: u.owned.toString() }]));
+    const buildings = Object.fromEntries(Object.entries(this.buildings).map(([key, b]) => [key, { ...b, cost: b.cost.toString(), baseCost: b.baseCost.toString(), multiplierPerSecond: b.multiplierPerSecond.toString(), owned: b.owned.toString() }]));
     return { currency: this.currency.toString(), clickMultiplier: this.clickMultiplier.toString(), passiveMultiplier: this.passiveMultiplier.toString(), upgrades, buildings, challenges: this.challenges, autobuyers: this.autobuyers, activeChallenge: this.activeChallenge, isRunning: this.isRunning };
   }
 }
 if (typeof module !== 'undefined' && module.exports) module.exports = Game;
-
