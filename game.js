@@ -44,45 +44,41 @@ class Game {
   click() { this.currency = this.currency.mul(this.clickMultiplier); }
   _modifiers() { return this.challenges[this.activeChallenge]?.modifiers || {}; }
 
-  // Cost of `count` purchases starting after `owned` items have already been bought.
-  // The old implementation omitted `owned`, so every bulk purchase started at the
-  // base price and the displayed cost could appear not to increase.
+  // Total cost of count purchases, beginning at the current owned level.
   _purchaseCost(base, rate, count, owned = new MetaNum(0)) {
-    base = new MetaNum(base);
-    rate = new MetaNum(rate);
-    count = new MetaNum(count);
-    owned = new MetaNum(owned);
-    const exponent = owned.add(count.mul(count.sub(1)).div(2));
-    return base.mul(MetaNum.pow(rate, exponent));
+    base = new MetaNum(base); rate = new MetaNum(rate);
+    count = new MetaNum(count); owned = new MetaNum(owned);
+    const exponent = owned.mul(count).add(count.mul(count.sub(1)).div(2));
+    return MetaNum.pow(base, count).mul(MetaNum.pow(rate, exponent));
+  }
+
+  _nextCost(base, rate, owned) {
+    return new MetaNum(base).mul(MetaNum.pow(rate, new MetaNum(owned)));
   }
 
   maxAffordableCount(currency, baseCost, rate, owned = new MetaNum(0)) {
-    if (!currency || !baseCost || !rate || currency.isNaN() || baseCost.isNaN() || rate.isNaN()) return new MetaNum(0);
-    const r = rate instanceof MetaNum ? rate : new MetaNum(rate);
-    owned = owned instanceof MetaNum ? owned : new MetaNum(owned);
-    if (!currency.gte(this._purchaseCost(baseCost, r, 0, owned))) return new MetaNum(0);
+    currency = new MetaNum(currency); baseCost = new MetaNum(baseCost); rate = new MetaNum(rate); owned = new MetaNum(owned);
+    if (currency.isNaN() || baseCost.isNaN() || rate.isNaN() || owned.isNaN() || !currency.gte(baseCost)) return new MetaNum(0);
 
     const lnCurrency = currency.ln();
-    const lnBase = new MetaNum(baseCost).ln();
-    const lnRate = r.ln();
-    if (MetaNum.abs(lnRate).lt(new MetaNum('1e-12'))) {
-      return lnBase.gt(0) ? MetaNum.floor(lnCurrency.div(lnBase)) : new MetaNum(0);
-    }
+    const lnBase = baseCost.ln();
+    const lnRate = rate.ln();
+    if (lnRate.eq(0)) return lnBase.eq(0) ? new MetaNum(0) : MetaNum.floor(lnCurrency.div(lnBase));
 
-    // Solve: log(cost) = log(base) + (owned+n)log(rate) + n(n-1)log(rate)/2
+    // Solve ln(base^n * rate^(owned*n+n(n-1)/2)) <= ln(currency).
     const a = lnRate.div(2);
     const b = lnBase.add(owned.mul(lnRate)).sub(a);
-    const discriminant = b.mul(b).sub(a.mul(lnCurrency).mul(4));
+    const c = lnCurrency.neg();
+    const discriminant = b.mul(b).sub(a.mul(c).mul(4));
     if (discriminant.isNaN() || discriminant.lt(0)) return new MetaNum(0);
 
     let result = MetaNum.floor(b.neg().add(discriminant.sqrt()).div(a.mul(2)));
     if (result.isNaN() || result.lt(0)) return new MetaNum(0);
 
-    const cost = n => this._purchaseCost(baseCost, r, n, owned);
-    // Correct rounding from the closed-form estimate. The loops normally run
-    // only once or twice and do not iterate over the number of purchases.
-    while (result.gt(0) && cost(result).gt(currency)) result = result.sub(1);
-    while (cost(result.add(1)).lte(currency)) result = result.add(1);
+    const cost = n => this._purchaseCost(baseCost, rate, n, owned);
+    // Correct only rounding errors; do not iterate once per purchase.
+    for (let i = 0; i < 4 && result.gt(0) && cost(result).gt(currency); i++) result = result.sub(1);
+    for (let i = 0; i < 4 && cost(result.add(1)).lte(currency); i++) result = result.add(1);
     return result;
   }
 
@@ -100,7 +96,6 @@ class Game {
     const max = this.maxAffordableCount(this.currency, upgrade.baseCost, rate, upgrade.owned);
     const count = this._count(amount, max);
     if (count.isNaN() || count.lte(0)) return false;
-
     const purchaseCost = this._purchaseCost(upgrade.baseCost, rate, count, upgrade.owned);
     if (purchaseCost.isNaN() || purchaseCost.gt(this.currency)) return false;
     const multiplier = MetaNum.pow(upgrade.multiplier, count);
@@ -113,7 +108,7 @@ class Game {
 
     upgrade.owned = upgrade.owned.add(count);
     this.currency = this.currency.div(purchaseCost).max(1);
-    upgrade.cost = this._purchaseCost(upgrade.baseCost, rate, 0, upgrade.owned);
+    upgrade.cost = this._nextCost(upgrade.baseCost, rate, upgrade.owned);
     return true;
   }
 
@@ -124,12 +119,12 @@ class Game {
     const max = this.maxAffordableCount(this.currency, building.baseCost, rate, building.owned);
     const count = this._count(amount, max);
     if (count.isNaN() || count.lte(0)) return false;
-
     const purchaseCost = this._purchaseCost(building.baseCost, rate, count, building.owned);
     if (purchaseCost.isNaN() || purchaseCost.gt(this.currency)) return false;
+
     building.owned = building.owned.add(count);
     this.currency = this.currency.div(purchaseCost).max(1);
-    building.cost = this._purchaseCost(building.baseCost, rate, 0, building.owned);
+    building.cost = this._nextCost(building.baseCost, rate, building.owned);
     return true;
   }
 
@@ -141,12 +136,7 @@ class Game {
   }
 
   toggleAutobuyer(type) { if (!this.autobuyers[type]) return false; this.autobuyers[type].enabled = !this.autobuyers[type].enabled; this._lastAutobuyerRun = performance.now(); return this.autobuyers[type].enabled; }
-  setAutobuyerInterval(type, value) {
-    const n = Number(value);
-    if (!this.autobuyers[type] || !Number.isFinite(n)) return false;
-    this.autobuyers[type].intervalMs = Math.max(100, Math.round(n));
-    return true;
-  }
+  setAutobuyerInterval(type, value) { const n = Number(value); if (!this.autobuyers[type] || !Number.isFinite(n)) return false; this.autobuyers[type].intervalMs = Math.max(100, Math.round(n)); return true; }
 
   tick() {
     for (const building of Object.values(this.buildings)) if (building.owned.gt(0)) this.currency = this.currency.mul(MetaNum.pow(building.multiplierPerSecond, building.owned).pow(new MetaNum(this.tickRate).div(1000)));
