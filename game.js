@@ -137,7 +137,7 @@ class Game {
   }
 
   toggleAutobuyer(type) { if (!this.autobuyers[type]) return false; this.autobuyers[type].enabled = !this.autobuyers[type].enabled; this._lastAutobuyerRun = performance.now(); return this.autobuyers[type].enabled; }
-  setAutobuyerInterval(type, value) { const n = Number(value); if (!this.autobuyers[type] || !Number.isFinite(n)) return false; this.autobuyers[type].intervalMs = Math.max(100, Math.round(n)); return true; }
+  setAutobuyerInterval(type, value) { const n = Number(value); if (!this.autobuyers[type] || !Number.isFinite(n)) return false; this.autobuyers[type].intervalMs = Math.max(20, Math.round(n)); return true; }
 
   tick() {
     for (const building of Object.values(this.buildings)) if (building.owned.gt(0)) this.currency = this.currency.mul(MetaNum.pow(building.multiplierPerSecond, building.owned).pow(new MetaNum(this.tickRate).div(1000)));
