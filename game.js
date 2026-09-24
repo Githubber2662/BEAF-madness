@@ -20,7 +20,7 @@ class Game {
     this.upgrades = {
       doubleClick: { id: 'doubleClick', name: 'Double Click', description: '×2 click power', multiplier: new MetaNum(2), baseCost: new MetaNum(10), cost: new MetaNum(10), owned: new MetaNum(0), type: 'click', hyper: new MetaNum(0) },
       fastPacing: { id: 'fastPacing', name: 'Fast Pacing', description: '×1.5 passive multiplier', multiplier: new MetaNum(1.5), baseCost: new MetaNum(100), cost: new MetaNum(100), owned: new MetaNum(0), type: 'passive', hyper: new MetaNum(0) },
-      exponentialGrowth: { id: 'exponentialGrowth', name: 'Exponential Growth', description: 'passive multiplier^1.2', multiplier: new MetaNum(1.2), baseCost: new MetaNum(1000), cost: new MetaNum(1000), owned: new MetaNum(0), type: 'passive', hyper: new MetaNum(1),
+      exponentialGrowth: { id: 'exponentialGrowth', name: 'Exponential Growth', description: 'passive multiplier^1.2', multiplier: new MetaNum(1.2), baseCost: new MetaNum(1000), cost: new MetaNum(1000), owned: new MetaNum(0), type: 'passive', hyper: new MetaNum(1)},
       tetrationalGrowth: { id: 'tetrationalGrowth', name: 'Tetrational Growth', description: 'passive multiplier^^1.1', multiplier: new MetaNum(1.1), baseCost: new MetaNum("F1000"), cost: new MetaNum(2), owned: new MetaNum(0), type: 'passive', hyper: new MetaNum(2)}
     };
   }
