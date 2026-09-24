@@ -191,7 +191,7 @@ class Game {
   exportSave() { return localStorage.getItem('beaf_save_v1') || '{}'; }
   importSave(text) { try { JSON.parse(text); localStorage.setItem('beaf_save_v1', text); return this.load(); } catch (e) { return false; } }
   hardReset() { if (!confirm('Are you sure? This will delete your save and reset progress.')) return false; localStorage.removeItem('beaf_save_v1'); location.reload(); return true; }
-  startChallenge(id) { if (!this.challenges[id]) return false; this.activeChallenge = id; this.currency = new MetaNum(1); this.clickMultiplier = new MetaNum(1.1); this.passiveMultiplier = new MetaNum(1); return true; }
+  startChallenge(id) { if (!this.challenges[id]) return false; this.activeChallenge = id; this.currency = new MetaNum(1); this.clickMultiplier = new MetaNum(1.1); this.passiveMultiplier = new MetaNum(1); for (const building of Object.values(this.buildings)) building.owned = new MetaNum(0); for (const upgrade of Object.values(this.upgrades)) upgrade.owned = new MetaNum(0); return true; }
   endChallenge() { this.activeChallenge = 'none'; return true; }
   checkChallengeGoals() { for (const goal of this.challenges[this.activeChallenge]?.goals || []) if (!goal.claimed && goal.type === 'currency' && this.currency.gte(goal.target)) goal.completed = true; }
   claimChallengeGoal(challengeId, goalId) { const goal = this.challenges[challengeId]?.goals?.find(g => g.id === goalId); if (!goal || goal.claimed || !goal.completed) return false; goal.claimed = true; return true; }
