@@ -141,6 +141,8 @@ class Game {
 
   tick() {
     for (const building of Object.values(this.buildings)) if (building.owned.gt(0)) this.currency = this.currency.mul(MetaNum.pow(building.multiplierPerSecond, building.owned).pow(new MetaNum(this.tickRate).div(1000)));
+    for (const building of Object.values(this.buildings)) building.cost = this._purchaseCost(building.baseCost, new MetaNum(1.15), new MetaNum(1), building.owned);
+    for (const upgrade of Object.values(this.upgrades)) upgrade.cost = this._purchaseCost(upgrade.baseCost, new MetaNum(2), new MetaNum(1), upgrade.owned);
     let passive = this.passiveMultiplier.clone();
     if (this._modifiers().passiveMultiplierBonus) passive = passive.mul(this._modifiers().passiveMultiplierBonus);
     this.currency = this.currency.mul(passive.pow(new MetaNum(this.tickRate).div(1000)));
