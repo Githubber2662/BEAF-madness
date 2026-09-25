@@ -1,5 +1,20 @@
 // Uses metanum.js for handling huge numbers
-
+/* function formatLargeNumMetaNum(num, mode, decis) {
+  let outarr = [null, null, null, null, null];
+  let output = "";
+  if(!(num instanceof MetaNum)) num = new MetaNum(String(num)); 
+  if(num.lt(0)) {
+    outarr[0] = "-";
+    num = num.abs();
+  }
+  if(num.lt(new MetaNum("EE" + String(decis)).rec())) {
+    num = num.rec()
+    outarr[1] = "(";
+    outarr[3] = ")";
+    outarr[4] = "<sup>-1</sup>"
+  }
+  if(nul.lt(new MetaNum
+} */
 class Game {
   constructor() {
     this.currency = new MetaNum(1);
